@@ -1,0 +1,26 @@
+div.large-messages 
+	h2 Welcome to Babbler!
+	br
+	- if (everyauth.loggedIn)
+		a(href="/logout") Logout
+		span &nbsp| 
+		a(href="/chat") Chat
+	- else
+		a(href="/auth/facebook")
+			img(src='/images/fb_login_btn.png', alt='Login With Facebook')
+
+	br
+	br
+	p.message-single(style='text-align:center; margin: 0px auto')
+		| Babbler let's you chat with random people on Facebook!
+		br
+		| We only use your profile picture and first name and don't expose 
+		| your profile or store your chat logs.
+		br
+		| Babbler is in alpha, some things may not work as expected.
+	br
+	p.message-single(style='text-align:center; margin: 0px auto')
+		| Contact me on Twitter 
+		strong 
+			a(href="http://www.twitter.com/st3redstripe") @st3redstripe
+	br

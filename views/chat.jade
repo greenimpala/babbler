@@ -1,0 +1,78 @@
+div#header.unselectable
+	div#left.section
+		div#logo
+		div.breaker
+		div#btn-new-partner.button.white.hidden New Partner
+		div#btn-end-chat.button.white.hidden End Chat
+		span.spam-report.hidden Report as spam
+	div#right.section
+		div#mini-profile-pic
+			
+		span Signed in as 
+			strong #{currentUser.first_name}
+		div.breaker
+		span#users-online(style="margin-left: 10px") 
+			strong #{online}
+			|  people online
+		div.breaker
+		div#settings
+
+	div.nav-dropdown.hidden
+		ul
+			strong
+				li 
+					input(type="checkbox", checked="true", id="checkbox-sounds") 
+					| Chat sounds
+				li Refresh picture
+				li Delete account
+				li Feedback / Bugs
+				hr
+				a(href="/logout")
+					li Logout
+
+div#main
+	div#jplayer-pop
+	div#jplayer-easteregg
+	div#message-update.large-messages
+		h2 Downloading your profile picture, just a moment...
+		br
+		img(src='/images/loading_fb.gif', alt='Searching...')
+
+	div#message-initial.large-messages.hidden
+		h2 Hi #{currentUser.first_name}. Welcome to Babbler!
+		br
+		h2 Click 'New Partner' to get started. 
+
+	div#message-searching.large-messages.hidden
+		h2 Searching for a partner...
+		br
+		img(src='/images/loading_fb.gif', alt='Searching...')
+
+	div#message-noone-found.large-messages.hidden
+		h2 No one was found, you should probably try again!
+
+	div#message-init-fail.large-messages.hidden
+		h2 Could not download your profile picture. Refresh to try again.
+
+	div#message-server-error.large-messages.hidden
+		h2 You aren't logged in! Try logging in again.
+
+	div#partner-identity.unselectable.hidden
+		div#img-container
+			img#picture(src='', alt='Partner Profile Picture')
+		span#partner-name You're chatting to Fiona!
+
+	div#chat-area-wrapper.hidden
+		div#chat-area
+			div#conversation-wrapper
+				div#conversation
+					div.message-spacer.no-border
+					div#conversation-actual
+					div#partner-typing
+						div#is-typing.hidden
+							div#partner-typing-img
+							span Fiona is typing...
+			textarea#text.
+	
+	div#footer-container
+		div#footer

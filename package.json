@@ -1,0 +1,18 @@
+{
+  "name": "Babbler",
+  "version": "0.0.1-7",
+  "private": true,
+  "subdomain": "babbler",
+  "scripts": {
+    "start": "app.js"
+  },
+  "dependencies": {
+    "express": "2.5.2",
+    "jade": ">= 0.0.1",
+    "mongoose": ">= 2.4.8",
+    "connect": ">= 1.8.5",
+    "connect-mongo": ">= 0.1.6",
+    "everyauth": ">= 0.2.27",
+    "socket.io": ">= 0.8.7"
+  }
+}
