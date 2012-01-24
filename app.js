@@ -1,5 +1,5 @@
 // Module dependencies.
-var express			= require('express'),
+var express         = require('express'),
 	routes         	= require('./routes'),
 	mongoose    	= require('mongoose'),
 	everyauth      	= require('everyauth'),
@@ -18,7 +18,7 @@ var authService      		= require('./lib/auth-service'),
 
 // Configuration
 var app = module.exports = express.createServer(),
-	io 	= require('socket.io').listen(app);
+	io  = require('socket.io').listen(app);
 	
 process.on('uncaughtException', function (err) {
 	console.log("ERROR: An uncaught exception was thrown... Printing details...");
@@ -53,7 +53,11 @@ app.configure(function () {
 	app.set('view options', { pretty: 'true' });
 	app.use(express.bodyParser());
 	app.use(express.cookieParser());
-	app.use(express.session({ store: sessionStore, secret: sensitive.session.secret, key: 'express.sid' }));
+	app.use(express.session({ 
+		store: sessionStore,
+		secret: sensitive.session.secret,
+		key: 'express.sid'
+	}));
 	app.use(everyauth.middleware());
 	app.use(express.methodOverride());
 	app.use(app.router);
