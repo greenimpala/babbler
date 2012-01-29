@@ -83,10 +83,10 @@ app.get('/chat', function(req, res) {
         var userId = req.session.auth.facebook.user.id;
         
         return models.User.findOne({ profile_id: userId }, function (err, user) {
-            if (err) { return res.end('Db error, contact administrator.'); }
+            if (err) { return res.end('Database error... We should be back soon.'); }
 
             return res.render('chat', {
-                title: 'Welcome to Babbler!',
+                title: 'Babbler',
                 layout: '_chat',
                 currentUser: user,
                 online: io.sockets.clients().length + 1 // +1 to account for this user
@@ -158,30 +158,30 @@ io.sockets.on('connection', function (socket) {
         var accessToken = socket.handshake.accessToken;
         
         models.User.findOne({ profile_id: userId }, function (err, user) {
-            if (err) { return socket.emit('initFailed'); }
+            if (err) { return socket.emit('init-failed'); }
             
             // Check if user is new / has no profile picture
             if (!user.pic_large) {
-                return profilePicService.updateProfilePictures(accessToken, userId, function (err, pictureURL) {
-                    if (err) { return socket.emit('initFailed'); }
+                profilePicService.updateProfilePictures(accessToken, userId, function (err, pictureURL) {
+                    if (err) { return socket.emit('init-failed'); }
 
-                    socket.handshake.fb_user.pic_large_url = pictureURL; // Fix socket: oiginally had no picture.
-                    return socket.emit('initSuccess', pictureURL);
+                    socket.handshake.fb_user.pic_large_url = pictureURL; // Fix socket: originally had no picture.
                 });
             }
-            socket.emit('initSuccess', user.pic_large_url);
+            
+            socket.emit('init-success', socket.handshake.fb_user);
         });
     });
     
-    socket.on('requestPartner', function (data) {
+    socket.on('request-partner', function (data) {
         return socketPool.push(socket);
     });
     
-    socket.on('endChat', function () {
+    socket.on('end-chat', function () {
         socket.get('currentRoom', function (err, roomName) {
             if (err || !roomName) { return; }
             
-            socket.broadcast.to(roomName).emit('partnerDisconnect');
+            socket.broadcast.to(roomName).emit('partner-disconnect');
             socket.leave(roomName);
             socket.set('currentRoom', null);
             
@@ -189,7 +189,7 @@ io.sockets.on('connection', function (socket) {
         });
     });
     
-    socket.on('sendMessage', function (data) {
+    socket.on('send-message', function (data) {
         socket.get('currentRoom', function (err, roomName) {
             if (err || !roomName) { return; }
             
@@ -198,11 +198,11 @@ io.sockets.on('connection', function (socket) {
         });
     });
     
-    socket.on('sendTypingUpdate', function (isTyping) {
+    socket.on('typing-update', function (isTyping) {
         socket.get('currentRoom', function (err, roomName) {
             if (err || !roomName) { return; }
             
-            socket.broadcast.to(roomName).emit('partnerTyping', isTyping);
+            socket.broadcast.to(roomName).emit('partner-typing', isTyping);
         });
     });
     
@@ -210,7 +210,7 @@ io.sockets.on('connection', function (socket) {
         socket.get('currentRoom', function (err, roomName) {
             if (err || !roomName) { return; }
             
-            socket.broadcast.to(roomName).emit('partnerDisconnect');
+            socket.broadcast.to(roomName).emit('partner-disconnect');
         });
         var i;
         // Remove the disconected socket from the socketPool
