@@ -1,12 +1,25 @@
- 
+div#lightbox
 
 div#header.unselectable
     div#left.section
         div#logo
         div.breaker
+        div#friends.nav-button.pressed
+        div.breaker
         div#btn-new-partner.button.white New Partner
-        div#btn-end-chat.button.white End Chat
+        div#btn-end-chat.button.white.hidden End Chat
         span.spam-report.hidden Report as spam
+
+    div.nav-dropdown#friends-dropper
+        h2 Random Partner
+        hr
+        ul
+        p.empty-message When you're chatting to someone random, they will appear here!
+        h2 Friends
+        hr
+        ul
+        p.empty-message You're friends list is empty.
+    
     div#right.section
         div#mini-profile-pic
             
@@ -17,18 +30,16 @@ div#header.unselectable
             strong #{online}
             |  people online
         div.breaker
-        div#settings
+        div#settings.nav-button
 
-    div.nav-dropdown.hidden
+    div.nav-dropdown#settings-dropper.hidden
         ul
             strong
                 li 
                     input(type="checkbox", checked="true", id="checkbox-sounds") 
                     | Chat sounds
-                li Refresh picture
-                li Delete account
-                li Feedback / Bugs
-                hr
+                li Options
+                li Feedback
                 a(href="/logout")
                     li Logout
 
@@ -36,7 +47,7 @@ div#main
     div#jplayer-pop
     div#jplayer-easteregg
     div#message-update.large-messages
-        h2 Downloading your profile picture, just a moment...
+        h2 Loading, just a moment...
         br
         img(src='/images/loading_fb.gif', alt='Searching...')
 
@@ -45,20 +56,6 @@ div#main
         br
         h2 Click 'New Partner' to get started. 
 
-    div#message-searching.large-messages.hidden
-        h2 Searching for a partner...
-        br
-        img(src='/images/loading_fb.gif', alt='Searching...')
-
-    div#message-noone-found.large-messages.hidden
-        h2 No one was found, you should probably try again!
-
-    div#message-init-fail.large-messages.hidden
-        h2 Could not download your profile picture. Refresh to try again.
-
-    div#message-server-error.large-messages.hidden
-        h2 You aren't logged in! Try logging in again.
-
     div#chat-sessions-container
 
     script(id="template-chat-session", type="text/x-mustache").
@@ -66,8 +63,8 @@ div#main
         <div id="partner-identity">
             <div id="img-container">
                 <img id="picture" src="{{pic_large_url}}" alt="Partner Profile Picture" />
-            <span id="partner-name">You're chatting to {{first_name}}!</span>
             </div>
+            <span id="partner-name">You're chatting to {{first_name}}!</span>
         </div>
 
         <div id="chat-area-wrapper">
@@ -86,6 +83,28 @@ div#main
                 </div>
                 <textarea id="text"></textarea>
             </div>
+        </div>
+
+    script(id="template-chat-message", type="text/x-mustache").
+    
+        <div class="message-spacer"></div>
+        <div class="message-group">
+            <img src="{{picture}}" alt="">
+            <div class="messages">
+                <div class="message-single">{{body}}</div>
+            </div>
+        </div>
+    
+    script(id="template-friends-list", type="tex/x-mustache").
+
+        <div class="left">
+            <img src="{{picture}}" style="height: 44px; width: 44px" />
+        </div>
+        <div class="left">
+            <p class="remove">Remove</p>
+            <p class="name">{{first_name}}</p>
+            <p class="message">{{body}}</p>
+            <p class="date">{{date}}</p>
         </div>
     
     div#footer-container

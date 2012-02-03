@@ -75,7 +75,7 @@ app.configure('production', function () {
 
 // Routes
 app.get('/', function(req, res) {
-    res.render('index', {title: 'Welcome to Babbler!'});
+    res.render('index', { title: 'Babbler - Chat to random people on Facebook!' });
 });
 
 app.get('/chat', function(req, res) {
@@ -83,10 +83,10 @@ app.get('/chat', function(req, res) {
         var userId = req.session.auth.facebook.user.id;
         
         return models.User.findOne({ profile_id: userId }, function (err, user) {
-            if (err) { return res.end('Database error... We should be back soon.'); }
+            if (err) { return res.end('Database error.'); }
 
             return res.render('chat', {
-                title: 'Babbler',
+                title: 'Babbler - Chat to random people on Facebook!',
                 layout: '_chat',
                 currentUser: user,
                 online: io.sockets.clients().length + 1 // +1 to account for this user
@@ -100,18 +100,21 @@ app.get('/admin', function(req, res) {
     req.end();
 });
 
-// Socket.io
+/** 
+ * Socket.IO
+ **/
 var socketPool = []; // Sockets requesting partners
 
 partnerPairingService.poll(socketPool); // Service runs continuously, pairing available sockets.
 
 // Initial authorization for a connecting socket
-io.set('authorization', function (handshakeData, callback) {
-    if (handshakeData.headers.cookie) {
-        handshakeData.cookie = parseCookie(handshakeData.headers.cookie);
-        handshakeData.sessionID = handshakeData.cookie['express.sid'];
+// Returns callback (null, true) if auth was succesful
+io.set('authorization', function (handshake, callback) {
+    if (handshake.headers.cookie) {
+        handshake.cookie = parseCookie(handshake.headers.cookie);
+        handshake.sessionID = handshake.cookie['express.sid'];
 
-        return sessionStore.get(handshakeData.sessionID, function (err, session) {
+        return sessionStore.get(handshake.sessionID, function (err, session) {
             if (err || !session) { return callback('Invalid session', false); }
             
             try {
@@ -123,8 +126,8 @@ io.set('authorization', function (handshakeData, callback) {
                 return models.User.findOne({ profile_id: userId }, function (err, user) {
                     if (err) { throw new Error('Db error'); }
                     
-                    handshakeData.fb_user     = user; // Set fb user data in the users socket.handshake
-                    handshakeData.accessToken = accessToken; // Set access token, socket may need to make API calls
+                    handshake.fb_user     = user; // Set fb user data in the users socket.handshake
+                    handshake.accessToken = accessToken; // Set access token, socket may need to make API calls
                     
                     return callback(null, true);
                 });
@@ -146,68 +149,65 @@ io.configure(function () {
 
 // Emit to all sockets the number of connected sockets
 var usersOnline = setInterval(function () {
-    io.sockets.emit('usersOnline', io.sockets.clients().length);
+    io.sockets.emit('update:UsersOnline', io.sockets.clients().length);
 }, 1000 * 60); // Every minute
 
 io.sockets.on('connection', function (socket) {
 
-    // Checks if user has an associated profile picture
-    // and downloads one if nescessary.
-    socket.on('init', function (data) {
+    // Checks if user has a profile picture
+    // Downloads one if nescessary and returns the user model.
+    socket.on('init', function (data, res) {
         var userId = socket.handshake.fb_user.profile_id;
         var accessToken = socket.handshake.accessToken;
         
         models.User.findOne({ profile_id: userId }, function (err, user) {
-            if (err) { return socket.emit('init-failed'); }
+            if (err) { return res(err); }
+
+            // Set socket to listen on a room named after their _id
+            // Any chat responses from private sessions will be sent to this room
+            socket.join(user._id);
             
             // Check if user is new / has no profile picture
             if (!user.pic_large) {
-                profilePicService.updateProfilePictures(accessToken, userId, function (err, pictureURL) {
-                    if (err) { return socket.emit('init-failed'); }
+                return profilePicService.updateProfilePictures(accessToken, userId, function (err, pictureURL) {
+                    if (err) { return res(err); }
 
                     socket.handshake.fb_user.pic_large_url = pictureURL; // Fix socket: originally had no picture.
+                    res(null, socket.handshake.fb_user);
                 });
             }
-            
-            socket.emit('init-success', socket.handshake.fb_user);
+            res(null, socket.handshake.fb_user);
         });
     });
-    
-    socket.on('request-partner', function (data) {
-        return socketPool.push(socket);
+
+    // Client is requesting their collection of private chat sessions
+    socket.on('read:ChatSessionCollection', function (data, res) {
+        // Test response
+        res([]);
+    });
+
+    // Client is requesting a random partner
+    socket.on('create:RandomChatSession', function () {
+        socketPool.push(socket); // Add socket to socket pool
     });
     
-    socket.on('end-chat', function () {
-        socket.get('currentRoom', function (err, roomName) {
-            if (err || !roomName) { return; }
-            
-            socket.broadcast.to(roomName).emit('partner-disconnect');
-            socket.leave(roomName);
-            socket.set('currentRoom', null);
-            
-            console.log("User '" + socket.handshake.fb_user.first_name + "' left a room.");
-        });
+    socket.on('create:Message', function (message, res) {
+        socket.broadcast.to(message.partner).emit('new:Message', message);
+        res();
     });
     
-    socket.on('send-message', function (data) {
-        socket.get('currentRoom', function (err, roomName) {
-            if (err || !roomName) { return; }
-            
-            var message = messageParser.parse(data.body);
-            socket.broadcast.to(roomName).emit('newMessage', { body: message });
-        });
+    socket.on('create:TypingStatus', function (typing, res) {
+        socket.broadcast.to(typing.partner).emit('new:TypingStatus', typing);
+        res();
     });
-    
-    socket.on('typing-update', function (isTyping) {
-        socket.get('currentRoom', function (err, roomName) {
-            if (err || !roomName) { return; }
-            
-            socket.broadcast.to(roomName).emit('partner-typing', isTyping);
-        });
+
+    socket.on('delete:ChatSession', function (session, res) {
+        socket.broadcast.to(session.partner).emit('delete:ChatSession', session);
+        res();
     });
     
     socket.on('disconnect', function () {
-        socket.get('currentRoom', function (err, roomName) {
+        socket.get('randomRoom', function (err, roomName) {
             if (err || !roomName) { return; }
             
             socket.broadcast.to(roomName).emit('partner-disconnect');

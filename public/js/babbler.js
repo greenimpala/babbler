@@ -1,252 +1,44 @@
-/*global jQuery, $, io, window, console */
+/*
+ ____   
+| ___ \     | |   | |   | |          
+| |_/ / __ _| |__ | |__ | | ___ _ __ 
+| ___ \/ _` | '_ \| '_ \| |/ _ \ '__|
+| |_/ / (_| | |_) | |_) | |  __/ |   
+\____/ \__,_|_.__/|_.__/|_|\___|_|  
+_____________________________________
+
+@title     Babbler
+@author    Stephen Bradshaw
+@contact   @st3redstripe (Twitter)
+@version   0.02
+
+*/
 
 $(function () {
-    var socket;
+    window.socket;
 
-    var UserModel = Backbone.Model.extend({
-        profile_id: '',
-        first_name: '',
-        gender: '',
-        pic_large: '',
-        pic_large_url: '',
-    });
-        
-    // A single chat message
-    var MessageModel = Backbone.Model.extend({
-        defaults: {
-            datetime: new Date()
-        }
-    });
+    /**
+     * Configuration
+     **/
+    Backbone.Model.prototype.idAttribute = "_id";
 
-    var TypingStatusModel = Backbone.Model.extend({
-        defaults: {
-            user_typing: false,
-            partner_typing: false
-        }
-    });
-
-    // A collection of messages within a chatsession
-    var MessageCollection = Backbone.Collection.extend({
-        model: MessageModel,
-    });
-
-    var ChatSessionCollection = Backbone.Collection.extend({
-        model: ChatSessionModel,
-    });
-
-    var FriendsListCollection = Backbone.Collection.extend({
-        model: UserModel
-    });
-
-    var ChatSessionModel = Backbone.Model.extend({
-        partner: null,
-        messages: new MessageCollection(),
-        typing_model: new TypingStatusModel()
-    });
-
-    // Resonsible for a single chat session
-    // Model: ChatSessionModel
-    var ChatSessionView = Backbone.View.extend({
-        //className: 'hidden', // Ensure session is initially hidden
-        template: $('#template-chat-session').html(), // Cache template
-
-        events: {
-            "keypress #text": "sendMessageOnEnter"
-        },
-
-        initialize: function() {
-            _.bindAll(this, 'addMessage', 'render', 'sendMessageOnEnter', 'sendIsTyping', 'updateTypingStatus');
-
-            this.model.messages.bind('add', this.addMessage);
-            this.model.typing_model.bind('change:partner_typing', this.updateTypingStatus);
-            this.model.typing_model.bind('change:user_typing', this.sendIsTyping);
-        },
-
-        addMessage: function(message) {
-            // TODO: insert element then use .text() to prevent html
-            this.$('#conversation-actual').append(message.get("body"));
-            this.$('#conversation').scrollTop(9999);
-        },
-
-        sendMessageOnEnter: function(e) {
-            var text = e.target.value;
-
-            if (e.shiftKey) { // User wants a new line
-                return;
-            } else if (e.keyCode === 13) { // Enter pressed
-                e.preventDefault();
-                if (text.length < 1) { return; }
-
-                // Create the new message
-                var message = new MessageModel({
-                    body: text,
-                    socketio_room: this.model.get("socketio_room")
-                });
-
-                this.model.messages.add(message); // Add to local messages
-                socket.emit('send-message', message.toJSON()); // Send to server
-
-                this.model.typing_model.set({ user_typing: false }, { silent: true });
-                this.$('#conversation').scrollTop(99999);
-                e.target.value = "";
-            } else { // User typing
-                var self = this;
-
-                // Set a timeout to change user_typing = false 
-                // Called if user stops typing for 5 seconds
-                clearTimeout(this.typing_timeout);
-                this.typing_timeout = setTimeout(function () {
-                    self.model.typing_model.set({ user_typing: false });
-                }, 5000);
-
-                this.model.typing_model.set({ user_typing: true });
-            }
-        },
-
-        // Update the DOM to show whether partner is typing
-        updateTypingStatus: function () {
-            var is_typing = this.model.typing_model.get('partner_typing');
-
-            if (is_typing) {
-                $(this.partner_typing_el).show();
-            } else {
-                $(this.partner_typing_el).hide();
-            } 
-        },
-
-        // Updates the server on whether the user is typing
-        sendIsTyping: function () {
-            var is_typing = this.model.typing_model.get('user_typing');
-
-            if (is_typing) {
-                console.log("User is typing..");
-                socket.emit('typing-update', is_typing);
-            } else {
-                console.log("User stopped typing..")
-                socket.emit('typing-update', is_typing);
-            }
-        },
-
-        // Method called once to create a new chat session
-        render: function() {
-            var element = Mustache.render(this.template, this.model.partner.toJSON()); // Template result
-            $(this.el).html(element); // Update el
-
-            // Cache element for partner typing
-            this.partner_typing_el = this.$('#is-typing');
-
-            return this;
-        }
-    });
-
-    var RandomChatSessionModel = ChatSessionModel.extend({});
-
-    // Responsible for overall application behaviour
-    // Listens for and handles server socket requests
-    var AppView = Backbone.View.extend({
-        el: $('body'),
-
-        user: null, // This user
-        settings: null, // Users settings
-
-        random_chat_session: null, // Instance of a ChatSessionCollection
-        private_chat_sessions: new ChatSessionCollection(), // Instance of a ChatSessionModel
-        friends_list: new FriendsListCollection(), // Users friends list
-
-        initialize: function() {
-            _.bindAll(this, 'createChatSession');
-            var self = this;
-
-            // Bindings
-            this.private_chat_sessions.bind('add', this.createChatSession);
-
-            // Socket IO
-            socket.on('new-message', function (data) {
-                // delegate
-            });
-
-            socket.on('partner-typing', function (data) {
-                
-            });   
-            
-                    
-
-
-
-
-
-
-            // TEST
-            var chatsession = new ChatSessionModel({ 
-                socketio_room: 123
-            });
-            chatsession.partner = new UserModel({ first_name: "Douglas" });
-            this.private_chat_sessions.add(chatsession)
-            chatsession.messages.add(new MessageModel({ body: "hey" }));
-            chatsession.typing_model.set({ partner_typing: true });
-        },
-
-        createChatSession: function(session) {
-            var view = new ChatSessionView({ model: session }); // Create model
-
-            this.$('#chat-sessions-container').append(view.render().el); // Render and add element to DOM
-        }
-    });
-
-
-    socket = io.connect('/'); // Initialise server connection
-
-    socket.on('connect', function () {
-        // The socket connected succesfully, request initialization
-        socket.emit('init'); 
-
-        socket.on('init-success', function(environment) {
-            // Socket initialized succesfully
-
-            // environment - data for setting up the initial environment:
-            // environment.user       - this user
-            // environment.settings   - users settings
-            // environment.sessions   - private sessions that have unread messages
-            // environment.notifs     - number of notifications
-
-            var App = new AppView(environment); // Start the app
-        });
-    });
-
-    /** END BACKBONE RE-WRITE **/
-/*
-
-    var ChatSessionView = function () {
-        var self         = this,
-            current_user = null;
-
-        this.requestPartner = function () {
-            if (this.app_status === 'searching') { return; }
-            this.app_status = 'searching';
-            console.log("Requesting new partner");
-            
-            btnNewPartner.hide();
-            btnEndChat.hide();
-            chatWrapper.hide(animSpeed);
-            partnerIdentity.hide(animSpeed);
-            nooneFoundMessage.hide(animSpeed);
-            initialMessage.hide(animSpeed);
-            searchMessage.fadeIn(animSpeed);
-            
-            if (current_user) { socket.emit('endChat'); }
-            socket.emit('requestPartner');
-        };
+    window.Config = {
+        ANIM_SPEED: 100, // Speed of jQuery animations
     };
 
-    var AudioModule = {
-        _elem0: $("#jplayer-pop"),
-        _elem1: $("#jplayer-easteregg"),
-        _files: [],
+    /** 
+     * Wrapper for playing audio with jPlayer
+     * Method play plays the file with the given string
+     **/
+    window.AudioModule = {
+        elem0: $("#jplayer-pop"),
+        elem1: $("#jplayer-easteregg"),
+        files: [],
 
-        _initialisePopSound: function(){
-            var _obj = { name: "pop" };
+        initialisePopSound: function(){
+            var obj = { name: "pop" };
 
-            _obj.sound = this._elem0.jPlayer({
+            obj.sound = this.elem0.jPlayer({
                 swfPath: "/audio",
                 ready: function () {
                     $(this).jPlayer("setMedia", { mp3: "/audio/pop.mp3" });
@@ -256,13 +48,13 @@ $(function () {
                 preload: 'auto'
             })
             
-            this._files.push(_obj); 
+            this.files.push(obj); 
         },
 
-        _initialliseEasterEgg: function(){
-            var _obj = { name: "ben" };
+        initialliseEasterEgg: function(){
+            var obj = { name: "ben" };
 
-            _obj.sound = this._elem1.jPlayer({
+            obj.sound = this.elem1.jPlayer({
                 swfPath: "/audio",
                 ready: function () {
                     $(this).jPlayer("setMedia", { mp3: "/audio/ben.mp3" });
@@ -272,13 +64,15 @@ $(function () {
                 preload: 'auto'
             })  
 
-            this._files.push(_obj);
+            this.files.push(obj);
         },
 
         play: function(file) {
-            var files = this._files;
+            var files  = this.files
+              , length = files.length
+              , i;
             
-            for (var i = 0; i < files.length; i += 1) {
+            for (i = 0; i < length; i += 1) {
                 if (files[i].name === file) {
                     files[i].sound.jPlayer('stop').jPlayer('play');
                     return;
@@ -287,112 +81,495 @@ $(function () {
         },
 
         init: function(){
-            this._initialisePopSound();
-            this._initialliseEasterEgg();
+            this.initialisePopSound();
+            this.initialliseEasterEgg();
             return this;
         }
     }.init();
 
-    settingsButton.click(function () {
-        $(this).toggleClass('pressed');
-        settingsDropdown.toggle();
+    /** 
+     * Models / Collections
+     **/
+
+    var UserModel = Backbone.Model.extend({
+        
     });
-
-    btnNewPartner.click(function () {
-        if (appStatus === 'searching') { return; }
-        appStatus = 'searching';
         
-        btnNewPartner.hide();
-        btnEndChat.hide();
-        chatWrapper.hide(animSpeed);
-        partnerIdentity.hide(animSpeed);
-        nooneFoundMessage.hide(animSpeed);
-        initialMessage.hide(animSpeed);
-        searchMessage.fadeIn(animSpeed);
+    // A single chat message
+    var MessageModel = Backbone.Model.extend({
+        url: 'Message',
         
-        if (currentUser) { socket.emit('endChat'); }
-        socket.emit('requestPartner');
-    });
-
-    btnEndChat.click(function () {
-        if (appStatus !== 'chatting') { return; }
-        appStatus = 'idle';
-        
-
-        partnerIdentity.hide(animSpeed);
-        btnEndChat.hide();
-        
-        socket.emit('endChat');
-    });
-
-    socket.on('noPartnerFound', function () {
-        appStatus = 'idle';
-        
-        searchMessage.hide(animSpeed);
-        nooneFoundMessage.show(animSpeed);
-        btnNewPartner.hide();
-    });
-
-    socket.on('connectedToPartner', function (data) {
-        if (appStatus !== 'searching') { return; }
-
-        appStatus = 'chatting';
-        convoStatus = 'empty';
-        
-        conversation.empty();
-        textArea.val('');
-        userTyping = false;
-        
-        currentUser = data.user;
-        
-        partnerIdentity.find('#img-container').html('<img src="' + currentUser.pic_large_url + '" alt="" id="picture" />');
-        partnerIdentity.find('#partner-name').html("You're chatting to " + currentUser.first_name);
-        
-        btnNewPartner.show();
-        btnEndChat.show();
-        searchMessage.hide(animSpeed);
-        partnerIdentity.fadeIn(animSpeed, function () {
-            chatWrapper.fadeIn(animSpeed);
-        });
-    });
-
-    socket.on('partnerDisconnect', function () {
-        if (appStatus !== 'chatting') { return; }
-        
-        appStatus = 'idle';
-        convoStatus = 'empty';
-
-        conversation.append('<div class="message-single info">Partner has disconected</div>');
-        convoScroller.scrollTop(99999);
-        btnEndChat.hide();
-        partnerIdentity.hide(animSpeed);
-    });
-
-    socket.on('initFailed', function () {
-        updateMessage.hide(animSpeed, function () {
-            initErrorMessage.fadeIn(animSpeed);
-        });
-    });
-
-    socket.on('initSuccess', function (picture) {
-        miniProfilePicSrc = picture;
-        miniProfilePic.html('<img width="28px" height="28px" src="' + picture + '" alt="" />');
-        btnNewPartner.show();
-        
-        updateMessage.hide(animSpeed);
-        initialMessage.fadeIn(animSpeed);
-    });
-
-    socket.on('usersOnline', function (users) {
-        if (!isNaN(users)) { // If valid number
-            usersOnline.find("strong").text(users);
+        initialize: function(){
+            this.set({ datetime: new Date() });
         }
     });
 
-    socket.socket.on('error', function (reason) {
-        console.log("Error handshaking." + reason);
+    var TypingStatusModel = Backbone.Model.extend({
+        url: 'TypingStatus',
+        defaults: {
+            user_typing    : false,
+            partner_typing : false
+        }
     });
 
-    socket.emit('init'); // Start init tasks
-    */
+    var SettingsModel = Backbone.Model.extend({
+        defaults: {
+            chat_sounds : false
+        }
+    });
+    
+    // A collection of messages within a chatsession
+    var MessageCollection = Backbone.Collection.extend({
+        url: "MessageCollection",
+        model: MessageModel
+    });
+
+    var ChatSessionModel = Backbone.Model.extend({
+        url: 'ChatSession',
+
+        defaults: {
+            is_random: false,
+            display: false
+        },
+
+        initialize: function () {
+            this.set({
+                typing_model  : new TypingStatusModel(),
+                messages      : new MessageCollection()
+            });
+        },
+
+        parse: function (data) {
+            // Accertain the partner from the list of participants
+            var partnerAttributes = data.participants[0]._id === User.id ? data.participants[1] : data.participants[0];
+
+            // Create the partner and add to attribute hash
+            data.partner = new UserModel(partnerAttributes);
+
+            delete data.participants; 
+            return data;
+        },
+
+        // Called when a session is deleted
+        // Only need the session id and partner id
+        toJSON: function(){
+            return {
+                _id: this.id,
+                is_random: this.get("is_random"),
+                partner: this.get("partner").id  
+            };
+        }
+    });
+
+    var ChatSessionCollection = Backbone.Collection.extend({
+        url: 'ChatSessionCollection',
+        model: ChatSessionModel
+    });
+
+    /** 
+     * Override for Backbone.sync
+     * Emits a socket request to the server
+     * Format: 'socket.emit(<method>:<model type>, <model.toJSON()> or <options.data>)'
+     **/
+    Backbone.sync = function(method, model, options) {
+        var model_type = _.isFunction(model.url) ? model.url(model) : model.url; // Get model URL 
+
+        if (!model_type) { throw new Error("Sync called without a URL"); }
+
+        // If we are performing a CRUD operation, send the model to the server
+        var data = (method === "create" || method === "update" || method === "delete") ? model.toJSON() : options.data;
+
+        // Send request via socket
+        socket.emit(method + ":" + model_type, data, function(res) {
+            // Call success and return any data that the server sent
+            options.success(res);
+        });
+
+        console.log("Sync called method: " + method + ":" + model_type + " data:");
+        console.log(data);
+    };
+
+    /**
+     * Resonsible for a single chat session
+     * Listens for changes on an instance of ChatSessionModel
+     **/
+    var ChatSessionView = Backbone.View.extend({
+        className: 'hidden', // Ensure session is initially hidden
+        template: $('#template-chat-session').html(), // Cache main template
+        message_template: $('#template-chat-message').html(), // Cache message template
+
+        events: {
+            "keypress #text": "handleTextAreaKeypress"
+        },
+
+        initialize: function() {
+            _.bindAll(this, 'render', 'handleTextAreaKeypress');
+
+            this.model.on("change:display", this.display, this);
+            this.model.on("destroy", this.remove, this);
+
+            this.model.get("messages").on("add", this.addMessage, this);
+            this.model.get("messages").on("reset", this.reRenderMessages, this);
+
+            this.model.get("typing_model").on('change:partner_typing', this.handlePartnerTypingChange, this);
+            this.model.get("typing_model").on('change:user_typing', this.handleUserTypingChange, this);
+        },
+
+        addMessage: function(message) {
+            var message_index = this.model.get("messages").indexOf(message)
+              , picture = message.get("sender") === User.id ? User.get("pic_large_url") : this.model.get("partner").get("pic_large_url")
+              , template_data = { // Construct template
+                    'body'    : message.get("body"),
+                    'picture' : picture
+                };
+
+            if (message_index === 0) {
+                // This is the first message in the chat area
+                // Create a new message from the template
+                var template = Mustache.render(this.message_template, template_data);
+                this.$('#conversation-actual').append(template);
+            } else {
+                // There is more than one message in the DOM
+                // Get the previous message
+                var previous_message = this.model.get("messages").at(message_index - 1);
+
+                if (previous_message.get("sender") !== message.get("sender")) { 
+                    // The last message in the DOM was sent from a different user
+                    // Create a new message from the template
+                    var template = Mustache.render(this.message_template, template_data);
+                    this.$('#conversation-actual').append(template);
+                } else { 
+                    // The last message in the DOM is from the same user
+                    // Add it to their existing template
+                    this.$('#conversation-actual .messages:last')
+                        .append('<div class="message-single"></div>');
+                    // We have to insert the body after to prevent HTML injection
+                    this.$('#conversation-actual .message-single:last')
+                        .text(message.get("body"));
+                }   
+            }
+            // Fix scroll position
+            this.$('#conversation').scrollTop(99999);
+        },
+
+        display: function () {
+            if (this.model.get("display")) {
+                this.$el.removeClass('hidden');
+            } else {
+                this.$el.addClass('hidden');
+            }
+            this.$('#conversation').scrollTop(99999);
+        },
+
+        /** 
+         * Called when older messages are loaded from the server
+         * Need to clear messages from the DOM, resort collection and add all
+         **/
+        reRenderMessages: function (messages) {
+            var self = this;
+
+            // Remove
+            self.$('#conversation-actual .message-group').remove();
+
+            // Resort
+
+            // Add
+            message.each(function (message) {
+                self.addMessage(message);
+            });
+        },
+
+        handleTextAreaKeypress: function(e) {
+            var text = e.target.value
+              , self = this;
+
+             if (e.keyCode === 13) { // Enter pressed, send if valid
+                e.preventDefault();
+
+                if (text.length < 1 || text.length > 600) { return; } // Validate length
+
+                // Create and send the new message
+                this.model.get("messages").create({
+                    'sender'  : User.id,
+                    'partner' : this.model.get("partner").id,
+                    'session' : this.model.id,
+                    'body'    : text
+                });
+
+                // Ensure user is no longer set as 'typing'
+                this.model.get("typing_model").set({ user_typing: false });
+
+                e.target.value = ""; // Reset text-area
+            } else { // User typing
+
+                // Set a timeout to change user_typing = false 
+                // Called if user stops typing for 5 seconds
+                clearTimeout(this.typing_timeout);
+                this.typing_timeout = setTimeout(function () {
+                    self.model.get("typing_model").set({ user_typing: false });
+                }, 5000);
+
+                self.model.get("typing_model").set({ user_typing: true });
+            }
+        },
+
+        /**
+         * Update the DOM to show whether partner is typing
+         **/
+        handlePartnerTypingChange: function (model) {
+            var is_typing = model.get('partner_typing');
+
+            if (is_typing) {
+                $(this.partner_typing_el).show();
+            } else {
+                $(this.partner_typing_el).hide();
+            }
+        },
+
+        /** 
+         * Updates the server on whether the user is typing
+         **/
+        handleUserTypingChange: function (model) {
+            model.save({
+                session: this.model.id,
+                partner: this.model.get("partner").id
+            });
+        },
+
+        remove: function () {
+            clearTimeout(this.typing_timeout); // Stop timeout firing if model is deleted
+            $(this.el).remove();
+        },
+
+        /** 
+         * Method called once to create a new chat session
+         **/
+        render: function() {
+            var template = Mustache.render(this.template, this.model.get("partner").toJSON()) // Template result
+              , self = this;
+
+            $(this.el).html(template); // Update el
+            this.partner_typing_el = this.$('#is-typing'); // Cache el for partner typing
+
+            return this;
+        }
+    });
+
+    var FriendsListItemView = Backbone.View.extend({
+        tagName: 'li',
+        template: $('#template-friends-list').html(),
+
+        events: {
+            "click" : "display",
+            "click p.remove" : "deleteSession"
+        },
+
+        initialize: function () {
+            this.model.get("messages").on("add", this.render, this);
+            this.model.on("destroy", this.remove, this);
+        },
+
+        display: function () {
+            // Close any open chat sessions
+            ChatSessions.each(function (session) {
+                session.set({ "display": false });
+            });
+
+            this.model.set({ "display" : true });
+        },
+
+        render: function (message) {
+            if (message) {
+                var ending = message.get("body").length > 25 ? "..." : ""
+                  , body = message.get("body").substring(0, 25) + ending
+                  , date = message.get("datetime").toTimeString().substring(0, 5);
+            };
+
+            var template_data = {
+                'picture'    : this.model.get("partner").get("pic_large_url"),
+                'first_name' : this.model.get("partner").get("first_name"),
+                'body'       : body || this.model.get("last_message"),
+                'date'       : date || this.model.get("date")
+            };
+
+            var template = Mustache.render(this.template, template_data);
+            $(this.el).html(template);
+
+            return this;
+        },
+
+        remove: function () {
+            $(this.el).remove();
+        },
+
+        deleteSession: function () {
+            this.model.destroy();
+        }
+    });
+
+    var FriendsListView = Backbone.View.extend({
+        el: $('#header'),
+        current_session: null, // Holds the model for the session currently shown
+
+        events: {
+            "click #friends" : "handleIconClick"
+        },
+
+        initialize: function () {
+            _.bindAll(this, 'addOne', 'addRandom', 'handleIconClick', 'restoreMessage');
+
+            RandomSessions.on('add', this.addRandom);
+            RandomSessions.on('remove', this.restoreMessage);
+            ChatSessions.on('add', this.addOne);
+        },
+
+        addOne: function (session) {
+            var view = new FriendsListItemView({ model: session });
+            this.$('#friends-dropper ul:eq(1)').append(view.render().el);
+        },
+
+        addRandom: function (session) {
+            var view = new FriendsListItemView({ model: session });
+            this.$('#friends-dropper .empty-message:eq(0)').hide();
+            this.$('#friends-dropper ul:eq(0)').append(view.render().el);
+        },
+
+        handleIconClick: function () {
+            this.$('#friends-dropper').toggleClass("hidden");
+            this.$('#friends').toggleClass("pressed");
+        },
+
+        restoreMessage: function () {
+            this.$('#friends-dropper .empty-message:eq(0)').show();
+        }
+    });
+
+    /** 
+     * Responsible for overall application behaviour
+     * Listens for and handles server socket requests
+     **/
+    var AppView = Backbone.View.extend({
+        el: $('body'),
+
+        events: {
+            "click #btn-new-partner" : "requestNewPartner"
+        },
+
+        initialize: function () {
+            _.bindAll(this, 'createChatSession', 'requestNewPartner', 'endChat');
+            var self = this;
+
+            /* Bindings */
+            ChatSessions.on('add', this.createChatSession);
+            RandomSessions.on('add', this.createChatSession);
+
+            /* Socket IO */
+
+            socket.on('new:Message', function (message) {
+                var chat_session = ChatSessions.get(message.session) 
+                                    || RandomSessions.get(message.session);;
+
+                // If sessions exists, add the message
+                if (chat_session) {
+                    chat_session.get("messages").add(message);
+                    chat_session.get("typing_model").set({ partner_typing : false });
+                }
+            });
+
+            socket.on('new:TypingStatus', function (typing) {
+                var chat_session = ChatSessions.get(typing.session) 
+                                    || RandomSessions.get(typing.session);;
+
+                // If sessions exists, set typing status
+                if (chat_session) {
+                    chat_session.get("typing_model")
+                        .set({ partner_typing: typing.user_typing });
+                }
+            });
+
+            socket.on('delete:ChatSession', function (session) {
+                var chat_session = ChatSessions.get(session._id) 
+                                    || RandomSessions.get(session._id);
+
+                if (chat_session) {
+                    chat_session.destroy();
+                }
+            });
+
+            socket.on('new:RandomPartner', function (session) {
+                if (RandomSessions.length > 0) { return; } // There is already a random session in place
+
+                // Accertain the partner from the list of participants
+                var partnerAttributes = session.participants[0]._id === User.id ? session.participants[1] : session.participants[0];
+
+                // Create the partner and add to attribute hash
+                session.partner = new UserModel(partnerAttributes);
+                delete session.participants; 
+                random_session = new ChatSessionModel(session);
+
+                RandomSessions.add(random_session);
+
+                $('#btn-new-partner').html("New Partner");
+            });
+
+            /* Initialization */
+
+            this.$('#mini-profile-pic').html('<img src="' + User.get("pic_large_url") + '" style="height: 28px; width: 28px" />');
+            this.$('#message-update').fadeOut(Config.ANIM_SPEED);
+
+            ChatSessions.fetch({ add: true }); // Grab all the users private chat sessions / friends list
+        },
+
+        createChatSession: function(session) {
+            var view = new ChatSessionView({ model: session }); // Create view from session
+            this.$('#chat-sessions-container').append(view.render().el); // Render and add element to DOM
+        },
+
+        requestNewPartner: function () {
+            socket.emit('create:RandomChatSession');
+            this.$('#btn-new-partner').html("Searching...");
+        },
+
+        endChat: function () {
+            // Find the random chat session
+            var session = ChatSessions.find(function(session) {
+                return session.get("is_random") === true;
+            });
+
+            session.destroy();
+        }
+    });
+
+    // Start a socket connection with server
+    socket = io.connect('/');
+
+    socket.on('connect', function () {
+        // The socket connected succesfully
+
+        // If the app has already launched, don't reload
+        // Occurs when the socket connection drops and re-connects
+        if (window.App) {
+            console.log("Reconnected to server.");
+            socket.emit('init'); // Re-initialise server
+            return;
+        }
+
+        // Request initialization
+        socket.emit('init', null, function (err, user) {
+            if (err) { // Profile picture could not be downloaded
+                alert("Profile picture could not be downloaded. Do you have one? Refresh page to try again.");
+                return; 
+            }
+
+            /**
+             * Setup global models / views
+             **/
+            window.User = new UserModel(user);
+            window.ChatSessions = new ChatSessionCollection();
+            window.RandomSessions = new ChatSessionCollection();
+            window.FriendsList = new FriendsListView();
+            window.App = new AppView();
+        });
+    });
+
 });
