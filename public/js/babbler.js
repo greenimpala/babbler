@@ -418,9 +418,9 @@ $(function () {
         initialize: function () {
             _.bindAll(this, 'addOne', 'addRandom', 'handleIconClick', 'restoreMessage');
 
+            ChatSessions.on('add', this.addOne);
             RandomSessions.on('add', this.addRandom);
             RandomSessions.on('remove', this.restoreMessage);
-            ChatSessions.on('add', this.addOne);
         },
 
         addOne: function (session) {
@@ -514,6 +514,7 @@ $(function () {
 
             /* Initialization */
 
+            // TO-DO: Keep HTML in the DOM
             this.$('#mini-profile-pic').html('<img src="' + User.get("pic_large_url") + '" style="height: 28px; width: 28px" />');
             this.$('#message-update').fadeOut(Config.ANIM_SPEED);
 
