@@ -155,7 +155,7 @@ var usersOnline = setInterval(function () {
 io.sockets.on('connection', function (socket) {
 
     // Checks if user has a profile picture
-    // Downloads one if nescessary and returns the user model.
+    // Downloads one if nescessary and returns the updated user model.
     socket.on('init', function (data, res) {
         var userId = socket.handshake.fb_user.profile_id;
         var accessToken = socket.handshake.accessToken;
@@ -164,7 +164,7 @@ io.sockets.on('connection', function (socket) {
             if (err) { return res(err); }
 
             // Set socket to listen on a room named after their _id
-            // Any chat responses from private sessions will be sent to this room
+            // Any chat responses from chat sessions will be sent to this room
             socket.join(user._id);
             
             // Check if user is new / has no profile picture
@@ -207,11 +207,6 @@ io.sockets.on('connection', function (socket) {
     });
     
     socket.on('disconnect', function () {
-        socket.get('randomRoom', function (err, roomName) {
-            if (err || !roomName) { return; }
-            
-            socket.broadcast.to(roomName).emit('partner-disconnect');
-        });
         var i;
         // Remove the disconected socket from the socketPool
         for (i = 0; i < socketPool.length; i += 1) {

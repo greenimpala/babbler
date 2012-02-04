@@ -99,7 +99,7 @@ $(function () {
     var MessageModel = Backbone.Model.extend({
         url: 'Message',
         
-        initialize: function(){
+        initialize: function () {
             this.set({ datetime: new Date() });
         }
     });
@@ -177,17 +177,46 @@ $(function () {
         if (!model_type) { throw new Error("Sync called without a URL"); }
 
         // If we are performing a CRUD operation, send the model to the server
-        var data = (method === "create" || method === "update" || method === "delete") ? model.toJSON() : options.data;
+        var data = (method === "create" || method === "update" 
+                    || method === "delete") ? model.toJSON() : options.data;
 
         // Send request via socket
         socket.emit(method + ":" + model_type, data, function(res) {
             // Call success and return any data that the server sent
             options.success(res);
         });
-
-        console.log("Sync called method: " + method + ":" + model_type + " data:");
-        console.log(data);
+        // console.log("Sync called method: " + method + ":" + model_type);
     };
+
+    /**
+     * Modal dialogue that appears when a user click 'remove' for a chat session
+     **/
+    var RemoveSessionView = Backbone.View.extend({
+        el: $('#lightbox-container'),
+        lb_background: $('#lightbox'),
+
+        events: {
+            "click #lb-continue" : "continue",
+            "click #lb-close"    : "close"  
+        },
+
+        display: function (session) {
+            this.lb_background.show();
+            this.$el.show();
+
+            this.session = session;
+        },
+
+        continue: function () {
+            this.close();
+            this.session.destroy();
+        },
+
+        close: function () {
+            this.$el.hide();
+            this.lb_background.hide();
+        }
+    });
 
     /**
      * Resonsible for a single chat session
@@ -253,12 +282,17 @@ $(function () {
         },
 
         display: function () {
-            if (this.model.get("display")) {
+            if (this.model.get("display")) { // Show session
+                if (CurrentSession) { // If there is a current session
+                    CurrentSession.set({ display : false });
+                }
                 this.$el.removeClass('hidden');
-            } else {
+                CurrentSession = this.model;
+            } else { // Hide session
                 this.$el.addClass('hidden');
             }
-            this.$('#conversation').scrollTop(99999);
+
+            this.$('#conversation').scrollTop(99999); // Fix scroll height
         },
 
         /** 
@@ -338,7 +372,10 @@ $(function () {
 
         remove: function () {
             clearTimeout(this.typing_timeout); // Stop timeout firing if model is deleted
-            $(this.el).remove();
+            $(this.el).remove();    
+            if (this.model === CurrentSession) {
+                CurrentSession = null;
+            }
         },
 
         /** 
@@ -370,11 +407,6 @@ $(function () {
         },
 
         display: function () {
-            // Close any open chat sessions
-            ChatSessions.each(function (session) {
-                session.set({ "display": false });
-            });
-
             this.model.set({ "display" : true });
         },
 
@@ -403,13 +435,13 @@ $(function () {
         },
 
         deleteSession: function () {
-            this.model.destroy();
+            RemoveSessionModal.display(this.model);
         }
     });
 
     var FriendsListView = Backbone.View.extend({
         el: $('#header'),
-        current_session: null, // Holds the model for the session currently shown
+        current_session: null,
 
         events: {
             "click #friends" : "handleIconClick"
@@ -508,8 +540,15 @@ $(function () {
                 random_session = new ChatSessionModel(session);
 
                 RandomSessions.add(random_session);
+                random_session.set({ display: true }); // Force display this session
 
                 $('#btn-new-partner').html("New Partner");
+            });
+
+            socket.on('update:UsersOnline', function (users) {
+                if (isNaN(users)) { return; }
+
+                $('#users-online strong').html(users);
             });
 
             /* Initialization */
@@ -569,6 +608,8 @@ $(function () {
             window.ChatSessions = new ChatSessionCollection();
             window.RandomSessions = new ChatSessionCollection();
             window.FriendsList = new FriendsListView();
+            window.RemoveSessionModal = new RemoveSessionView();
+            window.CurrentSession = null; // Holds the currently shown session
             window.App = new AppView();
         });
     });
