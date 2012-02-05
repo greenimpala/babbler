@@ -13,8 +13,7 @@ var authService             = require('./lib/auth-service'),
     partnerPairingService   = require('./lib/partner-pairing-service'),
     models                  = require('./lib/models'),
     guidGenerator           = require('./lib/guid-generator'),
-    sensitive               = require('./lib/sensitive'),
-    messageParser           = require('./lib/message-parser');
+    sensitive               = require('./lib/sensitive');
 
 // Configuration
 var app = module.exports = express.createServer(),
