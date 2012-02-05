@@ -26,6 +26,8 @@ $(function () {
         ANIM_SPEED: 100, // Speed of jQuery animations
     };
 
+    window.has_focus = true;
+
     /** 
      * Wrapper for playing audio with jPlayer
      * Method play plays the file with the given string
@@ -228,11 +230,12 @@ $(function () {
         message_template: $('#template-chat-message').html(), // Cache message template
 
         events: {
-            "keypress #text": "handleTextAreaKeypress"
+            "keypress #text" : "handleTextAreaKeypress",
+            "click #picture" : "handlePictureClick"
         },
 
         initialize: function() {
-            _.bindAll(this, 'render', 'handleTextAreaKeypress');
+            _.bindAll(this, 'render', 'handleTextAreaKeypress', 'handlePictureClick');
 
             this.model.on("change:display", this.display, this);
             this.model.on("destroy", this.remove, this);
@@ -370,6 +373,10 @@ $(function () {
             });
         },
 
+        handlePictureClick: function () {
+            this.$el.find('#picture').toggleClass('expand');  
+        },
+
         remove: function () {
             clearTimeout(this.typing_timeout); // Stop timeout firing if model is deleted
             $(this.el).remove();    
@@ -476,12 +483,46 @@ $(function () {
         }
     });
 
+
+    /** 
+     * Monitors blur/focus events
+     * Changes the pages title attribute
+     **/
+    var TitleView = Backbone.View.extend({
+        el: $(window),
+        title: $('title'),
+        default_title: "Babbler - Chat to random people on Facebook!",
+
+        events: {
+            "blur" : "handleBlur",
+            "focus": "handleFocus"
+        },
+
+        initialize: function () {
+            _.bindAll(this, 'handleFocus', 'handleBlur', 'newMessagesFlash')
+        },
+
+        handleFocus: function () {
+            window.has_focus = true;
+            $(this.title).html(this.default_title);
+        },
+
+        handleBlur: function () {
+            window.has_focus = false;
+        },
+
+        newMessagesFlash: function () {
+            $(this.title).html("New message!");
+        }
+    });
+
     /** 
      * Responsible for overall application behaviour
      * Listens for and handles server socket requests
      **/
     var AppView = Backbone.View.extend({
         el: $('body'),
+        is_searching: false,
 
         events: {
             "click #btn-new-partner" : "requestNewPartner"
@@ -490,6 +531,14 @@ $(function () {
         initialize: function () {
             _.bindAll(this, 'createChatSession', 'requestNewPartner', 'endChat');
             var self = this;
+
+            /* Global views/models */
+            window.ChatSessions = new ChatSessionCollection();
+            window.RandomSessions = new ChatSessionCollection();
+            window.FriendsList = new FriendsListView();
+            window.RemoveSessionModal = new RemoveSessionView();
+            window.TitleHandler = new TitleView();
+            window.CurrentSession = null; // Holds the currently shown session
 
             /* Bindings */
             ChatSessions.on('add', this.createChatSession);
@@ -505,6 +554,11 @@ $(function () {
                 if (chat_session) {
                     chat_session.get("messages").add(message);
                     chat_session.get("typing_model").set({ partner_typing : false });
+
+                    // If window is not in focus, change the <title> to inform user
+                    if (!window.has_focus) {
+                        TitleHandler.newMessagesFlash();
+                    }
                 }
             });
 
@@ -531,6 +585,9 @@ $(function () {
             socket.on('new:RandomPartner', function (session) {
                 if (RandomSessions.length > 0) { return; } // There is already a random session in place
 
+                self.is_searching = false;
+                $('#btn-new-partner').html("New Partner");
+
                 // Accertain the partner from the list of participants
                 var partnerAttributes = session.participants[0]._id === User.id ? session.participants[1] : session.participants[0];
 
@@ -541,8 +598,6 @@ $(function () {
 
                 RandomSessions.add(random_session);
                 random_session.set({ display: true }); // Force display this session
-
-                $('#btn-new-partner').html("New Partner");
             });
 
             socket.on('update:UsersOnline', function (users) {
@@ -553,7 +608,6 @@ $(function () {
 
             /* Initialization */
 
-            // TO-DO: Keep HTML in the DOM
             this.$('#mini-profile-pic').html('<img src="' + User.get("pic_large_url") + '" style="height: 28px; width: 28px" />');
             this.$('#message-update').fadeOut(Config.ANIM_SPEED);
 
@@ -566,6 +620,14 @@ $(function () {
         },
 
         requestNewPartner: function () {
+            if (this.is_searching) { return; }
+            this.is_searching = true;
+
+            // End any random session that may exist
+            if (CurrentSession && CurrentSession.get("is_random")) {
+                CurrentSession.destroy();
+            }
+
             socket.emit('create:RandomChatSession');
             this.$('#btn-new-partner').html("Searching...");
         },
@@ -602,14 +664,9 @@ $(function () {
             }
 
             /**
-             * Setup global models / views
+             * Setup global models
              **/
             window.User = new UserModel(user);
-            window.ChatSessions = new ChatSessionCollection();
-            window.RandomSessions = new ChatSessionCollection();
-            window.FriendsList = new FriendsListView();
-            window.RemoveSessionModal = new RemoveSessionView();
-            window.CurrentSession = null; // Holds the currently shown session
             window.App = new AppView();
         });
     });
