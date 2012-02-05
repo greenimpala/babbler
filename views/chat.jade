@@ -51,6 +51,7 @@ div#header.unselectable
                     li Logout
 
 div#main
+
     div#jplayer-pop
     div#jplayer-easteregg
     div#message-update.large-messages
@@ -66,30 +67,33 @@ div#main
     div#chat-sessions-container
 
     script(id="template-chat-session", type="text/x-mustache").
-
-        <div id="partner-identity">
-            <div id="img-container">
-                <img id="picture" src="{{pic_large_url}}" alt="Partner Profile Picture" />
+    
+        <div class="chat-session-wrapper">
+            <div id="partner-identity">
+                <div id="img-container">
+                    <img id="picture" src="{{pic_large_url}}" />
+                </div>
+                <span>{{first_name}}</span>
+                <span class="location">Leicester, UK</span>
+                <div class="button green">Friend Request</div>
             </div>
-            <span id="partner-name">You're chatting to {{first_name}}!</span>
-        </div>
 
-        <div id="chat-area-wrapper">
-            <div id="add-friend-area"><p><strong>+1</strong> Send Friend Request</p></div>
-            <div id="chat-area">
-                <div id="conversation-wrapper">
-                    <div id="conversation">
-                        <div class="message-spacer.no-border"></div>
-                        <div id="conversation-actual"></div>
-                        <div id="partner-typing" >
-                            <div id="is-typing" style="display: none">
-                                <div id="partner-typing-img"></div>
-                                <span>{{first_name}} is typing...</span>
+            <div id="chat-area-wrapper">
+                <div id="chat-area">
+                    <div id="conversation-wrapper">
+                        <div id="conversation">
+                            <div class="message-spacer.no-border"></div>
+                            <div id="conversation-actual"></div>
+                            <div id="partner-typing" >
+                                <div id="is-typing" style="display: none">
+                                    <div id="partner-typing-img"></div>
+                                    <span>{{first_name}} is typing...</span>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    <textarea id="text"></textarea>
                 </div>
-                <textarea id="text"></textarea>
             </div>
         </div>
 
