@@ -181,8 +181,33 @@ io.sockets.on('connection', function (socket) {
 
     // Client is requesting their collection of private chat sessions
     socket.on('read:ChatSessionCollection', function (data, res) {
-        // Test response
-        res([]);
+        // Find all chat sessions for this user
+        models.ChatSession.find({ 
+            'participants._id' : socket.handshake.fb_user._id 
+        }, function (err, sessions) {
+            if (err || !sessions) { return res([]); }
+            
+            // TODO: Does not work
+            // Not Syncronous
+            sessions.forEach(function(session){
+                session.last_message = "coot";
+                session.last_date = "12:23";
+                delete session.messages;
+            });
+
+            res(sessions);
+        });
+    });
+
+    // Client is requesting old messages for a private chat session
+    socket.on('read:MessageCollection', function (data, res) {
+        models.ChatSession.findOne({
+            _id : data.session
+        }, function (err, session) {
+            if (err || !session) { return res([]); }
+
+            res(session.messages)
+        });
     });
 
     // Client is requesting a random partner
@@ -190,9 +215,60 @@ io.sockets.on('connection', function (socket) {
         socketPool.push(socket); // Add socket to socket pool
     });
     
+    // Client has sent a new message
     socket.on('create:Message', function (message, res) {
         socket.broadcast.to(message.partner).emit('new:Message', message);
         res();
+
+        // If the message belongs to a private session it needs to be persisted
+        if (!message.is_random) {
+            var session = message.session;
+
+            // Optimize insert
+            delete message.partner;
+            delete message.session;
+            delete message.is_random;
+
+            // Insert message
+            models.ChatSession.collection.update({ $and: [
+                { '_id' : session },
+                { 'participants._id' : socket.handshake.fb_user._id }
+            ]}, { $push : { 'messages' : message } });
+        }
+    });
+
+    // User has sent or is accepting a friend request
+    socket.on('update:FriendStatus', function (data) {
+        // Validate
+        if (isNaN(data.state) && data.state > 3 && data.state < 0) { return; }
+
+        return socket.get('RandomSession', function (err, session) {
+            // Validation
+            if (err || !session) { return; }
+
+            // TO-DO: validate the state
+            //if (data.state === 3 && session.state !== 2) { return; }
+
+            // User has accepted the friend request
+            // Create friendship
+            if (data.state === 3) {
+                var new_session = new models.ChatSession({
+                    _id: guidGenerator.create(),
+                    participants: session.participants,
+                    button_state: 3 // Users are now friends
+                });
+
+                // Save new session in database
+                new_session.save(function(err){
+                    if (err) { return; }
+
+                    socket.broadcast.to(session.partner).emit('new:PrivateChatSession', new_session);
+                    socket.emit('new:PrivateChatSession', new_session);
+                });
+            }
+
+            socket.broadcast.to(session.partner).emit('update:FriendStatus', data);
+        });
     });
     
     socket.on('create:TypingStatus', function (typing, res) {
@@ -203,10 +279,25 @@ io.sockets.on('connection', function (socket) {
     socket.on('delete:ChatSession', function (session, res) {
         socket.broadcast.to(session.partner).emit('delete:ChatSession', session);
         res();
+
+        // If is private session, delete in database
+        if (!session.is_random) {
+            models.ChatSession.collection.remove({ $and: [
+                { _id : session._id },
+                { 'participants._id' : socket.handshake.fb_user._id }
+            ]});
+        }
     });
     
     socket.on('disconnect', function () {
         var i;
+
+        // If the socket is in a random room, end the chat session
+        socket.get('RandomSession', function (err, session) {
+            if (err || !session) { return; }
+            socket.broadcast.to(session.partner).emit('delete:ChatSession', session);
+        });
+
         // Remove the disconected socket from the socketPool
         for (i = 0; i < socketPool.length; i += 1) {
             if (socketPool[i] === socket) {

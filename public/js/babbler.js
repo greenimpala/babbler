@@ -131,7 +131,8 @@ $(function () {
 
         defaults: {
             is_random: false,
-            display: false
+            display: false,
+            button_state: 0 // The friend button
         },
 
         initialize: function () {
@@ -245,6 +246,8 @@ $(function () {
 
             this.model.get("typing_model").on('change:partner_typing', this.handlePartnerTypingChange, this);
             this.model.get("typing_model").on('change:user_typing', this.handleUserTypingChange, this);
+
+            this.model.get("messages").fetch({ data : { session: this.model.id } });
         },
 
         addMessage: function(message) {
@@ -311,7 +314,7 @@ $(function () {
             // Resort
 
             // Add
-            message.each(function (message) {
+            messages.each(function (message) {
                 self.addMessage(message);
             });
         },
@@ -327,10 +330,11 @@ $(function () {
 
                 // Create and send the new message
                 this.model.get("messages").create({
-                    'sender'  : User.id,
-                    'partner' : this.model.get("partner").id,
-                    'session' : this.model.id,
-                    'body'    : text
+                    'sender'    : User.id,
+                    'partner'   : this.model.get("partner").id,
+                    'session'   : this.model.id,
+                    'is_random' : this.model.get("is_random"),
+                    'body'      : text
                 });
 
                 // Ensure user is no longer set as 'typing'
@@ -389,16 +393,86 @@ $(function () {
          * Method called once to create a new chat session
          **/
         render: function() {
-            var template = Mustache.render(this.template, this.model.get("partner").toJSON()) // Template result
-              , self = this;
+            var template = Mustache.render(this.template, this.model.get("partner").toJSON()); // Template result
 
-            $(this.el).html(template); // Update el
+            this.$el.html(template); // Update el
+            this.$el.find('#partner-identity').append(new FriendButtonView({ model: this.model }).render().el);
+
             this.partner_typing_el = this.$('#is-typing'); // Cache el for partner typing
 
             return this;
         }
     });
 
+    /**
+     * Responsible for the 'Friend Request' button
+     **/
+    var FriendButtonView = Backbone.View.extend({
+        // @ChatSessionModel.button_state
+        // 0 - Default
+        // 1 - User has sent a request
+        // 2 - Partner has sent a request
+        // 3 - Pair are friends
+        tagName: "div",
+        className: "button green",
+
+        events: {
+            "click" : "handleButtonClick"
+        },
+
+        initialize: function () {
+            _.bindAll(this, "handleButtonClick");
+
+            this.model.on("change:button_state", this.render, this)
+        },
+
+        handleButtonClick: function () {
+            switch (this.model.get("button_state")) {
+                case 0 :
+                    // Send friend request
+                    socket.emit("update:FriendStatus", {
+                        session : this.model.id,
+                        state: 2
+                    });
+                    this.model.set({ button_state: 1 });
+                    break;
+                case 2 :
+                    // Accept friend request
+                    socket.emit("update:FriendStatus", {
+                        session : this.model.id,
+                        state: 3
+                    });
+                    this.model.set({ button_state: 3 });
+                    break;
+            };
+        },
+
+        render: function () {
+            var message;
+
+            switch (this.model.get("button_state")) {
+                case 0 :
+                    message = "Friend Request";
+                    break;
+                case 1 :
+                    message = "Request Sent";
+                    break;
+                case 2 :
+                    message = "Accept Request";
+                    break;
+                case 3 :
+                    message = "Friends";
+                    break;
+            };
+            this.$el.text(message);
+
+            return this;
+        }
+    });
+
+    /**
+     * Responsible for a chat session in the friends dropdown
+     **/
     var FriendsListItemView = Backbone.View.extend({
         tagName: 'li',
         template: $('#template-friends-list').html(),
@@ -428,7 +502,7 @@ $(function () {
                 'picture'    : this.model.get("partner").get("pic_large_url"),
                 'first_name' : this.model.get("partner").get("first_name"),
                 'body'       : body || this.model.get("last_message"),
-                'date'       : date || this.model.get("date")
+                'date'       : date || this.model.get("last_date")
             };
 
             var template = Mustache.render(this.template, template_data);
@@ -441,11 +515,15 @@ $(function () {
             $(this.el).remove();
         },
 
-        deleteSession: function () {
+        deleteSession: function (e) {
+            e.stopPropagation();
             RemoveSessionModal.display(this.model);
         }
     });
 
+    /**
+     * Friends dropdown box
+     **/
     var FriendsListView = Backbone.View.extend({
         el: $('#header'),
         current_session: null,
@@ -455,14 +533,16 @@ $(function () {
         },
 
         initialize: function () {
-            _.bindAll(this, 'addOne', 'addRandom', 'handleIconClick', 'restoreMessage');
+            _.bindAll(this, 'addOne', 'addRandom', 'handleIconClick', 'restoreRandomMessage', 'restorePrivateMessage');
 
             ChatSessions.on('add', this.addOne);
             RandomSessions.on('add', this.addRandom);
-            RandomSessions.on('remove', this.restoreMessage);
+            RandomSessions.on('remove', this.restoreRandomMessage);
+            ChatSessions.on('remove', this.restorePrivateMessage);
         },
 
         addOne: function (session) {
+            this.$('#friends-dropper .empty-message:eq(1)').hide();
             var view = new FriendsListItemView({ model: session });
             this.$('#friends-dropper ul:eq(1)').append(view.render().el);
         },
@@ -478,14 +558,20 @@ $(function () {
             this.$('#friends').toggleClass("pressed");
         },
 
-        restoreMessage: function () {
+        restoreRandomMessage: function () {
             this.$('#friends-dropper .empty-message:eq(0)').show();
+        },
+
+        restorePrivateMessage: function () {
+            if (ChatSessions.length === 0) {
+                this.$('#friends-dropper .empty-message:eq(1)').show();
+            }
         }
     });
 
 
     /** 
-     * Monitors blur/focus events
+     * Monitors blur/focus events on the window
      * Changes the pages title attribute
      **/
     var TitleView = Backbone.View.extend({
@@ -562,15 +648,35 @@ $(function () {
                 }
             });
 
+            socket.on('new:PrivateChatSession', function (data) {
+                var partnerAttributes = data.participants[0]._id === User.id ? data.participants[1] : data.participants[0];
+
+                // Create the partner and add to attribute hash
+                data.partner = new UserModel(partnerAttributes);
+
+                delete data.participants; 
+
+                ChatSessions.add(new ChatSessionModel(data));
+
+            });
+
             socket.on('new:TypingStatus', function (typing) {
                 var chat_session = ChatSessions.get(typing.session) 
-                                    || RandomSessions.get(typing.session);;
+                                    || RandomSessions.get(typing.session);
 
                 // If sessions exists, set typing status
                 if (chat_session) {
                     chat_session.get("typing_model")
                         .set({ partner_typing: typing.user_typing });
                 }
+            });
+
+            socket.on('update:FriendStatus', function (data) {
+               var chat_session = RandomSessions.get(data.session);
+               
+               if (chat_session) {
+                   chat_session.set({ button_state : data.state });
+               } 
             });
 
             socket.on('delete:ChatSession', function (session) {
