@@ -247,6 +247,9 @@ body{
 }
 
 #header .nav-dropdown#friends-dropper{
+	overflow-y: auto;
+	overflow-x: hidden;
+	max-height: 800px;
 	z-index: 1;
 	border-left-style: none;
 	color: black;
@@ -451,6 +454,7 @@ body{
 #chat-area-wrapper{
 	float:left;
 	width:100%;
+	margin-bottom: 30px;
 }
 
 #chat-area{

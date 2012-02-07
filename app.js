@@ -182,31 +182,24 @@ io.sockets.on('connection', function (socket) {
     // Client is requesting their collection of private chat sessions
     socket.on('read:ChatSessionCollection', function (data, res) {
         // Find all chat sessions for this user
+        // Exclude messages
         models.ChatSession.find({ 
             'participants._id' : socket.handshake.fb_user._id 
-        }, function (err, sessions) {
+        }, { 'messages' : 0 }, function (err, sessions) {
             if (err || !sessions) { return res([]); }
-            
-            // TODO: Does not work
-            // Not Syncronous
-            sessions.forEach(function(session){
-                session.last_message = "coot";
-                session.last_date = "12:23";
-                delete session.messages;
-            });
-
             res(sessions);
         });
     });
 
     // Client is requesting old messages for a private chat session
     socket.on('read:MessageCollection', function (data, res) {
-        models.ChatSession.findOne({
-            _id : data.session
-        }, function (err, session) {
+        models.ChatSession.findOne({ $and: [
+            { _id : data.session },
+            { 'participants._id' : socket.handshake.fb_user._id }
+        ]}, { 'messages' : 1 }, function (err, session) {
             if (err || !session) { return res([]); }
 
-            res(session.messages)
+            res(session.messages.slice(-25)) // Cap at 25 messages
         });
     });
 

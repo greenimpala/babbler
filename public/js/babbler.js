@@ -100,9 +100,10 @@ $(function () {
     // A single chat message
     var MessageModel = Backbone.Model.extend({
         url: 'Message',
-        
-        initialize: function () {
-            this.set({ datetime: new Date() });
+
+        parse: function (data) {
+            data.datetime = new Date(data.datetime);
+            return data;
         }
     });
 
@@ -334,7 +335,8 @@ $(function () {
                     'partner'   : this.model.get("partner").id,
                     'session'   : this.model.id,
                     'is_random' : this.model.get("is_random"),
-                    'body'      : text
+                    'body'      : text,
+                    'datetime'  : new Date()
                 });
 
                 // Ensure user is no longer set as 'typing'
@@ -484,6 +486,7 @@ $(function () {
 
         initialize: function () {
             this.model.get("messages").on("add", this.render, this);
+            this.model.get("messages").on("reset", this.handleReset, this)
             this.model.on("destroy", this.remove, this);
         },
 
@@ -501,14 +504,21 @@ $(function () {
             var template_data = {
                 'picture'    : this.model.get("partner").get("pic_large_url"),
                 'first_name' : this.model.get("partner").get("first_name"),
-                'body'       : body || this.model.get("last_message"),
-                'date'       : date || this.model.get("last_date")
+                'body'       : body,
+                'date'       : date
             };
 
             var template = Mustache.render(this.template, template_data);
             $(this.el).html(template);
 
             return this;
+        },
+
+        handleReset: function () {
+            var message = this.model.get("messages").last();
+            if (message) {
+                this.render(message);
+            }
         },
 
         remove: function () {
