@@ -10,7 +10,7 @@ _____________________________________
 @title     Babbler
 @author    Stephen Bradshaw
 @contact   @st3redstripe (Twitter)
-@version   0.02
+@version   0.03
 
 */
 
@@ -24,9 +24,8 @@ $(function () {
 
     window.Config = {
         ANIM_SPEED: 100, // Speed of jQuery animations
+        has_focus: true
     };
-
-    window.has_focus = true;
 
     /** 
      * Wrapper for playing audio with jPlayer
@@ -102,6 +101,7 @@ $(function () {
         url: 'Message',
 
         parse: function (data) {
+            if (!data) { return; }
             data.datetime = new Date(data.datetime);
             return data;
         }
@@ -181,6 +181,7 @@ $(function () {
         if (!model_type) { throw new Error("Sync called without a URL"); }
 
         // If we are performing a CRUD operation, send the model to the server
+        // Otherwise send options.data
         var data = (method === "create" || method === "update" 
                     || method === "delete") ? model.toJSON() : options.data;
 
@@ -189,7 +190,6 @@ $(function () {
             // Call success and return any data that the server sent
             options.success(res);
         });
-        // console.log("Sync called method: " + method + ":" + model_type);
     };
 
     /**
@@ -284,7 +284,7 @@ $(function () {
                         .text(message.get("body"));
                 }   
             }
-            // Fix scroll position
+            // Fix scroll height
             this.$('#conversation').scrollTop(99999);
         },
 
@@ -293,13 +293,15 @@ $(function () {
                 if (CurrentSession) { // If there is a current session
                     CurrentSession.set({ display : false });
                 }
+
                 this.$el.removeClass('hidden');
                 CurrentSession = this.model;
+
+                this.$('#conversation').scrollTop(99999); // Fix scroll height
+                this.$el.find('#text').focus(); // Force keyboard focus to textarea
             } else { // Hide session
                 this.$el.addClass('hidden');
             }
-
-            this.$('#conversation').scrollTop(99999); // Fix scroll height
         },
 
         /** 
@@ -312,7 +314,7 @@ $(function () {
             // Remove
             self.$('#conversation-actual .message-group').remove();
 
-            // Resort
+            // TODO: Resort
 
             // Add
             messages.each(function (message) {
@@ -384,8 +386,9 @@ $(function () {
         },
 
         remove: function () {
-            clearTimeout(this.typing_timeout); // Stop timeout firing if model is deleted
-            $(this.el).remove();    
+            clearTimeout(this.typing_timeout); // Clear typing timeout
+            $(this.el).remove();
+
             if (this.model === CurrentSession) {
                 CurrentSession = null;
             }
@@ -394,11 +397,14 @@ $(function () {
         /** 
          * Method called once to create a new chat session
          **/
-        render: function() {
+        renderOnce: function() {
             var template = Mustache.render(this.template, this.model.get("partner").toJSON()); // Template result
 
             this.$el.html(template); // Update el
-            this.$el.find('#partner-identity').append(new FriendButtonView({ model: this.model }).render().el);
+
+            // Create and add friend button
+            var button_view = new FriendButtonView({ model: this.model });
+            this.$el.find('#partner-identity').append(button_view.render().el);
 
             this.partner_typing_el = this.$('#is-typing'); // Cache el for partner typing
 
@@ -416,6 +422,7 @@ $(function () {
         // 2 - Partner has sent a request
         // 3 - Pair are friends
         tagName: "div",
+
         className: "button green",
 
         events: {
@@ -477,6 +484,7 @@ $(function () {
      **/
     var FriendsListItemView = Backbone.View.extend({
         tagName: 'li',
+
         template: $('#template-friends-list').html(),
 
         events: {
@@ -485,8 +493,11 @@ $(function () {
         },
 
         initialize: function () {
+            _.bindAll(this, 'deleteSession');
+
             this.model.get("messages").on("add", this.render, this);
             this.model.get("messages").on("reset", this.handleReset, this)
+            this.model.get("typing_model").on('change:partner_typing', this.handlePartnerTypingChange, this);
             this.model.on("destroy", this.remove, this);
         },
 
@@ -504,14 +515,24 @@ $(function () {
             var template_data = {
                 'picture'    : this.model.get("partner").get("pic_large_url"),
                 'first_name' : this.model.get("partner").get("first_name"),
-                'body'       : body,
-                'date'       : date
+                'body'       : body || "",
+                'date'       : date || ""
             };
 
             var template = Mustache.render(this.template, template_data);
             $(this.el).html(template);
 
             return this;
+        },
+
+        handlePartnerTypingChange: function (model) {
+            var is_typing = model.get('partner_typing');
+
+            if (is_typing) {
+                this.$el.find('.typing').show();
+            } else {
+                this.$el.find('.typing').hide();
+            }
         },
 
         handleReset: function () {
@@ -527,7 +548,13 @@ $(function () {
 
         deleteSession: function (e) {
             e.stopPropagation();
-            RemoveSessionModal.display(this.model);
+
+            // If random session, destroy immediately
+            if (this.model.get("is_random")) {
+                this.model.destroy();
+            } else { // User is removing a friend, dispay a model confirm box
+                RemoveSessionModal.display(this.model);
+            }
         }
     });
 
@@ -536,6 +563,7 @@ $(function () {
      **/
     var FriendsListView = Backbone.View.extend({
         el: $('#header'),
+
         current_session: null,
 
         events: {
@@ -543,7 +571,8 @@ $(function () {
         },
 
         initialize: function () {
-            _.bindAll(this, 'addOne', 'addRandom', 'handleIconClick', 'restoreRandomMessage', 'restorePrivateMessage');
+            _.bindAll(this, 'addOne', 'addRandom', 'handleIconClick', 
+                'restoreRandomMessage', 'restorePrivateMessage');
 
             ChatSessions.on('add', this.addOne);
             RandomSessions.on('add', this.addRandom);
@@ -586,12 +615,15 @@ $(function () {
      **/
     var TitleView = Backbone.View.extend({
         el: $(window),
+
         title: $('title'),
+
         default_title: "Babbler - Chat to random people on Facebook!",
 
         events: {
             "blur" : "handleBlur",
-            "focus": "handleFocus"
+            "focus": "handleFocus",
+            "resize" : "handleResize"
         },
 
         initialize: function () {
@@ -599,16 +631,20 @@ $(function () {
         },
 
         handleFocus: function () {
-            window.has_focus = true;
+            window.Config.has_focus = true;
             $(this.title).html(this.default_title);
         },
 
         handleBlur: function () {
-            window.has_focus = false;
+            window.Config.has_focus = false;
         },
 
         newMessagesFlash: function () {
             $(this.title).html("New message!");
+        },
+
+        handleResize: function () {
+            
         }
     });
 
@@ -634,7 +670,7 @@ $(function () {
             window.FriendsList = new FriendsListView();
             window.RemoveSessionModal = new RemoveSessionView();
             window.TitleHandler = new TitleView();
-            window.CurrentSession = null; // Holds the currently shown session
+            window.CurrentSession = null; // Holds the currently displayed session
 
             /* Bindings */
             ChatSessions.on('add', this.createChatSession);
@@ -648,18 +684,20 @@ $(function () {
 
                 // If sessions exists, add the message
                 if (chat_session) {
+                    message.datetime = new Date(message.datetime); // Create object
                     chat_session.get("messages").add(message);
                     chat_session.get("typing_model").set({ partner_typing : false });
 
                     // If window is not in focus, change the <title> to inform user
-                    if (!window.has_focus) {
+                    if (!window.Config.has_focus) {
                         TitleHandler.newMessagesFlash();
                     }
                 }
             });
 
             socket.on('new:PrivateChatSession', function (data) {
-                var partnerAttributes = data.participants[0]._id === User.id ? data.participants[1] : data.participants[0];
+                var partnerAttributes = data.participants[0]._id === 
+                    User.id ? data.participants[1] : data.participants[0];
 
                 // Create the partner and add to attribute hash
                 data.partner = new UserModel(partnerAttributes);
@@ -705,7 +743,8 @@ $(function () {
                 $('#btn-new-partner').html("New Partner");
 
                 // Accertain the partner from the list of participants
-                var partnerAttributes = session.participants[0]._id === User.id ? session.participants[1] : session.participants[0];
+                var partnerAttributes = session.participants[0]._id === 
+                    User.id ? session.participants[1] : session.participants[0];
 
                 // Create the partner and add to attribute hash
                 session.partner = new UserModel(partnerAttributes);
@@ -732,11 +771,12 @@ $(function () {
 
         createChatSession: function(session) {
             var view = new ChatSessionView({ model: session }); // Create view from session
-            this.$('#chat-sessions-container').append(view.render().el); // Render and add element to DOM
+            this.$('#chat-sessions-container').append(view.renderOnce().el); // Render and add element to DOM
         },
 
         requestNewPartner: function () {
-            if (this.is_searching) { return; }
+            if (this.is_searching) { return; } // Disallow multiple searches
+
             this.is_searching = true;
 
             // End any random session that may exist
@@ -745,6 +785,7 @@ $(function () {
             }
 
             socket.emit('create:RandomChatSession');
+
             this.$('#btn-new-partner').html("Searching...");
         },
 
@@ -768,7 +809,9 @@ $(function () {
         // Occurs when the socket connection drops and re-connects
         if (window.App) {
             console.log("Reconnected to server.");
-            socket.emit('init'); // Re-initialise server
+            socket.emit('init', function () {
+                ChatSessions.fetch({ add: true });
+            }); // Re-initialise server
             return;
         }
 
@@ -776,14 +819,11 @@ $(function () {
         socket.emit('init', null, function (err, user) {
             if (err) { // Profile picture could not be downloaded
                 alert("Profile picture could not be downloaded. Do you have one? Refresh page to try again.");
-                return; 
+                return;
             }
 
-            /**
-             * Setup global models
-             **/
             window.User = new UserModel(user);
-            window.App = new AppView();
+            window.App = new AppView(); // Begin
         });
     });
 

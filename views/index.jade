@@ -1,13 +1,8 @@
 div.large-messages 
 	h2 Welcome to Babbler!
 	br
-	- if (everyauth.loggedIn)
-		a(href="/logout") Logout
-		span &nbsp| 
-		a(href="/chat") Chat
-	- else
-		a(href="/auth/facebook")
-			img(src='/images/fb_login_btn.png', alt='Login With Facebook')
+	a(href="/auth/facebook")
+		img(src='/images/fb_login_btn.png', alt='Login With Facebook')
 
 	br
 	br

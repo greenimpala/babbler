@@ -74,6 +74,9 @@ app.configure('production', function () {
 
 // Routes
 app.get('/', function(req, res) {
+    if (req.loggedIn) {
+        return res.redirect("/chat");
+    }
     res.render('index', { title: 'Babbler - Chat to random people on Facebook!' });
 });
 
@@ -92,6 +95,7 @@ app.get('/chat', function(req, res) {
             });
         });
     }
+    // Else redirect to home
     return res.redirect("/");
 });
 
@@ -124,7 +128,7 @@ io.set('authorization', function (handshake, callback) {
                 
                 return models.User.findOne({ profile_id: userId }, function (err, user) {
                     if (err) { throw new Error('Db error'); }
-                    
+
                     handshake.fb_user     = user; // Set fb user data in the users socket.handshake
                     handshake.accessToken = accessToken; // Set access token, socket may need to make API calls
                     
@@ -172,6 +176,7 @@ io.sockets.on('connection', function (socket) {
                     if (err) { return res(err); }
 
                     socket.handshake.fb_user.pic_large_url = pictureURL; // Fix socket: originally had no picture.
+                    
                     res(null, socket.handshake.fb_user);
                 });
             }
@@ -199,7 +204,7 @@ io.sockets.on('connection', function (socket) {
         ]}, { 'messages' : 1 }, function (err, session) {
             if (err || !session) { return res([]); }
 
-            res(session.messages.slice(-25)) // Cap at 25 messages
+            res(session.messages.slice(-30)) // Cap at 30 most recent messages
         });
     });
 
@@ -240,7 +245,6 @@ io.sockets.on('connection', function (socket) {
             if (err || !session) { return; }
 
             // TO-DO: validate the state
-            //if (data.state === 3 && session.state !== 2) { return; }
 
             // User has accepted the friend request
             // Create friendship
@@ -248,13 +252,14 @@ io.sockets.on('connection', function (socket) {
                 var new_session = new models.ChatSession({
                     _id: guidGenerator.create(),
                     participants: session.participants,
-                    button_state: 3 // Users are now friends
+                    button_state: 3 // User pair are friends
                 });
 
                 // Save new session in database
                 new_session.save(function(err){
                     if (err) { return; }
 
+                    // Inform user pair
                     socket.broadcast.to(session.partner).emit('new:PrivateChatSession', new_session);
                     socket.emit('new:PrivateChatSession', new_session);
                 });
@@ -273,7 +278,7 @@ io.sockets.on('connection', function (socket) {
         socket.broadcast.to(session.partner).emit('delete:ChatSession', session);
         res();
 
-        // If is private session, delete in database
+        // If the session is private, delete it in the database
         if (!session.is_random) {
             models.ChatSession.collection.remove({ $and: [
                 { _id : session._id },
