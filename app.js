@@ -1,4 +1,4 @@
-// Module dependencies.
+                // Module dependencies.
 var express         = require('express'),
     routes          = require('./routes'),
     mongoose        = require('mongoose'),
@@ -20,7 +20,7 @@ var app = module.exports = express.createServer(),
     io  = require('socket.io').listen(app);
     
 process.on('uncaughtException', function (err) {
-    console.log("ERROR: An uncaught exception was thrown... Printing details...");
+    console.log("Uncaught exception");
     console.error(err);
 });
 
@@ -91,7 +91,7 @@ app.get('/chat', function(req, res) {
                 title: 'Babbler - Chat to random people on Facebook!',
                 layout: '_chat',
                 currentUser: user,
-                online: io.sockets.clients().length + 1 // +1 to account for this user
+                online: io.sockets.clients().length
             });
         });
     }
@@ -152,7 +152,7 @@ io.configure(function () {
 
 // Emit to all sockets the number of connected sockets
 var usersOnline = setInterval(function () {
-    io.sockets.emit('update:UsersOnline', io.sockets.clients().length);
+    io.sockets.emit('update:UsersOnline', io.sockets.clients().length - 1);
 }, 1000 * 60); // Every minute
 
 io.sockets.on('connection', function (socket) {
@@ -305,6 +305,8 @@ io.sockets.on('connection', function (socket) {
         }
     });
 });
+
+
 
 var port = process.env.PORT || 3000;
 app.listen(port);
