@@ -233,11 +233,11 @@ $(function () {
 
         events: {
             "keypress #text" : "handleTextAreaKeypress",
-            "click #picture" : "handlePictureClick"
+            "hover #picture" : "handlePictureHover"
         },
 
         initialize: function() {
-            _.bindAll(this, 'render', 'handleTextAreaKeypress', 'handlePictureClick');
+            _.bindAll(this, 'render', 'handleTextAreaKeypress', 'handlePictureHover');
 
             this.model.on("change:display", this.display, this);
             this.model.on("destroy", this.remove, this);
@@ -381,7 +381,7 @@ $(function () {
             });
         },
 
-        handlePictureClick: function () {
+        handlePictureHover: function () {
             this.$el.find('#picture').toggleClass('expand');  
         },
 
