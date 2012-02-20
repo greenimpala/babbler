@@ -1,4 +1,4 @@
-                // Module dependencies.
+// Module dependencies
 var express         = require('express'),
     routes          = require('./routes'),
     mongoose        = require('mongoose'),
@@ -37,7 +37,7 @@ mongoose.connect(sensitive.db.url);
 
 // Authorization
 everyauth.facebook
-    .scope('user_photos')
+    .scope('user_photos, publish_actions')
     .appId(sensitive.fb.appId)
     .appSecret(sensitive.fb.appSecret)
     .findOrCreateUser(function (session, accessToken, accessTokExtra, fbData) {
@@ -306,8 +306,5 @@ io.sockets.on('connection', function (socket) {
     });
 });
 
-
-
 var port = process.env.PORT || 3000;
 app.listen(port);
-console.log("Express server listening on port %d in %s mode", app.address().port, app.settings.env);
