@@ -10,7 +10,7 @@ _____________________________________
 @title     Babbler
 @author    Stephen Bradshaw
 @contact   @st3redstripe (Twitter)
-@version   0.03
+@version   0.02
 
 */
 
@@ -133,7 +133,8 @@ $(function () {
         defaults: {
             is_random: false,
             display: false,
-            button_state: 0 // The friend button
+            button_state: 0, // Friend button state
+            unread: 0
         },
 
         initialize: function () {
@@ -232,12 +233,11 @@ $(function () {
         message_template: $('#template-chat-message').html(), // Cache message template
 
         events: {
-            "keypress #text" : "handleTextAreaKeypress",
-            "hover #picture" : "handlePictureHover"
+            "keypress #text" : "handleTextAreaKeypress"
         },
 
         initialize: function() {
-            _.bindAll(this, 'render', 'handleTextAreaKeypress', 'handlePictureHover');
+            _.bindAll(this, 'render', 'handleTextAreaKeypress');
 
             this.model.on("change:display", this.display, this);
             this.model.on("destroy", this.remove, this);
@@ -248,6 +248,7 @@ $(function () {
             this.model.get("typing_model").on('change:partner_typing', this.handlePartnerTypingChange, this);
             this.model.get("typing_model").on('change:user_typing', this.handleUserTypingChange, this);
 
+            // Grab recent messages from the server
             this.model.get("messages").fetch({ data : { session: this.model.id } });
         },
 
@@ -381,10 +382,6 @@ $(function () {
             });
         },
 
-        handlePictureHover: function () {
-            this.$el.find('#picture').toggleClass('expand');  
-        },
-
         remove: function () {
             clearTimeout(this.typing_timeout); // Clear typing timeout
             $(this.el).remove();
@@ -496,19 +493,32 @@ $(function () {
             _.bindAll(this, 'deleteSession');
 
             this.model.get("messages").on("add", this.render, this);
-            this.model.get("messages").on("reset", this.handleReset, this)
+            this.model.get("messages").on("reset", this.handleReset, this);
+            this.model.on("change:unread", this.displayUnreadPopup, this);
             this.model.get("typing_model").on('change:partner_typing', this.handlePartnerTypingChange, this);
             this.model.on("destroy", this.remove, this);
         },
 
         display: function () {
+            // Hide the message popper
+            this.model.set("unread", 0);
+            this.$el.find('.new-message-popper').fadeOut(Config.ANIM_SPEED);
             this.model.set({ "display" : true });
+        },
+
+        displayUnreadPopup: function () {
+            var count = this.model.get("unread");
+            var elem = this.$el.find('.new-message-popper').text(count);
+            if (count === 1) { 
+                elem.fadeIn(Config.ANIM_SPEED);
+            } else {
+                elem.show();
+            }
         },
 
         render: function (message) {
             if (message) {
-                var ending = message.get("body").length > 25 ? "..." : ""
-                  , body = message.get("body").substring(0, 25) + ending
+                var body = message.get("body")
                   , date = message.get("datetime").toTimeString().substring(0, 5);
             };
 
@@ -562,16 +572,12 @@ $(function () {
      * Friends dropdown box
      **/
     var FriendsListView = Backbone.View.extend({
-        el: $('#header'),
+        el: $('#sidebar'),
 
         current_session: null,
 
-        events: {
-            "click #friends" : "handleIconClick"
-        },
-
         initialize: function () {
-            _.bindAll(this, 'addOne', 'addRandom', 'handleIconClick', 
+            _.bindAll(this, 'addOne', 'addRandom', 
                 'restoreRandomMessage', 'restorePrivateMessage');
 
             ChatSessions.on('add', this.addOne);
@@ -581,39 +587,53 @@ $(function () {
         },
 
         addOne: function (session) {
-            this.$('#friends-dropper .empty-message:eq(1)').hide();
+            this.$el.find('.empty-message:eq(1)').hide();
             var view = new FriendsListItemView({ model: session });
-            this.$('#friends-dropper ul:eq(1)').append(view.render().el);
+            this.$el.find('ul:eq(1)').append(view.render().el);
         },
 
         addRandom: function (session) {
             var view = new FriendsListItemView({ model: session });
-            this.$('#friends-dropper .empty-message:eq(0)').hide();
-            this.$('#friends-dropper ul:eq(0)').append(view.render().el);
-        },
-
-        handleIconClick: function () {
-            this.$('#friends-dropper').toggleClass("hidden");
-            this.$('#friends').toggleClass("pressed");
+            this.$el.find('.empty-message:eq(0)').hide();
+            this.$el.find('ul:eq(0)').append(view.render().el);
         },
 
         restoreRandomMessage: function () {
-            this.$('#friends-dropper .empty-message:eq(0)').show();
+            this.$el.find('.empty-message:eq(0)').show();
         },
 
         restorePrivateMessage: function () {
             if (ChatSessions.length === 0) {
-                this.$('#friends-dropper .empty-message:eq(1)').show();
+                this.$el.find('.empty-message:eq(1)').show();
             }
         }
     });
 
+    /**
+     * Settings drowndown
+     **/
+    var SettingsView = Backbone.View.extend({ 
+        el: $('#header'),
+
+        events: {
+            'click #settings' : 'handleSettingsClick'
+        },
+
+        init: function () {
+            _.bindAll(this, 'handleSettingsClick');
+        },
+
+        handleSettingsClick: function () {
+            this.$el.find('#settings-dropper').toggle();
+            this.$el.find('#settings').toggleClass('pressed');
+        }
+    });
 
     /** 
      * Monitors blur/focus events on the window
      * Changes the pages title attribute
      **/
-    var TitleView = Backbone.View.extend({
+    var WindowView = Backbone.View.extend({
         el: $(window),
 
         title: $('title'),
@@ -669,7 +689,8 @@ $(function () {
             window.RandomSessions = new ChatSessionCollection();
             window.FriendsList = new FriendsListView();
             window.RemoveSessionModal = new RemoveSessionView();
-            window.TitleHandler = new TitleView();
+            window.WindowHandler = new WindowView();
+            window.Settings = new SettingsView();
             window.CurrentSession = null; // Holds the currently displayed session
 
             /* Bindings */
@@ -684,13 +705,20 @@ $(function () {
 
                 // If sessions exists, add the message
                 if (chat_session) {
-                    message.datetime = new Date(message.datetime); // Create object
+                    message.datetime = new Date(message.datetime); // Fix nested models
                     chat_session.get("messages").add(message);
                     chat_session.get("typing_model").set({ partner_typing : false });
 
+                    // Flash the new messages popper if this isn't the current session
+                    if (chat_session !== CurrentSession)
+                    {
+                        var unread_messages = chat_session.get("unread") + 1;
+                        chat_session.set("unread", unread_messages);
+                    }
+
                     // If window is not in focus, change the <title> to inform user
                     if (!window.Config.has_focus) {
-                        TitleHandler.newMessagesFlash();
+                        WindowHandler.newMessagesFlash();
                     }
                 }
             });
@@ -762,10 +790,9 @@ $(function () {
             });
 
             /* Initialization */
-
+            // TO-DO: Remove the following HTML from the js
             this.$('#mini-profile-pic').html('<img src="' + User.get("pic_large_url") + '" style="height: 28px; width: 28px" />');
             this.$('#message-update').fadeOut(Config.ANIM_SPEED);
-
             ChatSessions.fetch({ add: true }); // Grab all the users private chat sessions / friends list
         },
 
@@ -809,9 +836,6 @@ $(function () {
         // Occurs when the socket connection drops and re-connects
         if (window.App) {
             console.log("Reconnected to server.");
-            socket.emit('init', function () {
-                ChatSessions.fetch({ add: true });
-            }); // Re-initialise server
             return;
         }
 

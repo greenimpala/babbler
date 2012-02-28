@@ -1,7 +1,21 @@
+div#fb-root
+script(type = "text/javascript")
+  (function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) return;
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_GB/all.js#xfbml=1&appId=273284762734006";
+  fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+  !function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");
+
+script(type="text/javascript", src="https://apis.google.com/js/plusone.js")
+  {lang: 'en-GB'}
+
 div#lightbox
 div#lightbox-container
     div#lightbox-window
-        h2 Remove Partner
+        h2 Remove Friend
         hr
         p Are you sure you want to remove this user from your friends? This cannot be undone.
         div.button.grey#lb-continue Continue
@@ -11,21 +25,8 @@ div#header.unselectable
     div#left.section
         div#logo
         div.breaker
-        div#friends.nav-button.pressed
-        div.breaker
         div#btn-new-partner.button.white New Partner
-        div#btn-end-chat.button.white.hidden End Chat
         span.spam-report.hidden Report as spam
-
-    div.nav-dropdown#friends-dropper
-        h2 Random Partner
-        hr
-        ul
-        p.empty-message When you're chatting to someone random, they will appear here!
-        h2 Friends
-        hr
-        ul
-        p.empty-message You're friends list is empty.
     
     div#right.section
         div#mini-profile-pic
@@ -45,10 +46,28 @@ div#header.unselectable
                 li 
                     input(type="checkbox", checked="true", id="checkbox-sounds") 
                     | Chat sounds
-                li Options
-                li Feedback
+                li Display picture
+                li Help
                 a(href="/logout")
                     li Logout
+
+div#sidebar
+    div#social-buttons
+        div.social-button
+            div.fb-like(data-send="false", data-layout="button_count", data-width="80", data-show-faces="false", data-font="arial")
+        div.social-button
+            a(href="https://twitter.com/share", class="twitter-share-button", data-url="http://www.babblerchat.com")
+        div.social-button
+            div.g-plusone(data-size="medium", data-href="http://www.babblerchat.com")
+
+    h2 Random Partner
+    hr
+    ul
+    p.empty-message When you're chatting to someone random, they will appear here!
+    h2 Friends
+    hr
+    ul
+    p.empty-message There are no friends.
 
 div#main
 
@@ -109,14 +128,16 @@ div#main
     script(id="template-friends-list", type="tex/x-mustache").
 
         <div class="left">
-            <img src="{{picture}}" style="height: 44px; width: 44px" />
+        <img src="{{picture}}" style="height: 46px; width: 46px">
+        <div class="new-message-popper" style="display:none">0</div>
         </div>
         <div class="left">
             <p class="remove">Remove</p>
-            <p class="name">{{first_name}}</p>
-            <div class="typing" style="display: none"></div>
-            <p class="message">{{body}}</p>
-            <p class="date">{{date}}</p>
+            <table>
+                <tr><td><p class="name">{{first_name}}</p><div class="typing" style="display: none"></div></td></tr>
+                <tr><td><p class="message">{{body}}</p></td></tr>
+                <tr><td><p class="date">{{date}}</p></td></tr>
+            </table>
         </div>
     
     div#footer-container

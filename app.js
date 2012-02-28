@@ -22,9 +22,12 @@ var app = module.exports = express.createServer(),
 process.on('uncaughtException', function (err) {
     console.log("Uncaught exception");
     console.error(err);
+    console.log(err.stack);
 });
 
-// Database
+/** 
+ * Database
+ **/
 sessionStore = new MongoStore({ 
     host           : sensitive.db.host, 
     port           : sensitive.db.port, 
@@ -35,11 +38,17 @@ sessionStore = new MongoStore({
 });
 mongoose.connect(sensitive.db.url);
 
-// Authorization
+/** 
+ * Authorisation
+ **/
 everyauth.facebook
     .scope('user_photos, publish_actions')
+    .myHostname('http://www.babblerchat.com')
     .appId(sensitive.fb.appId)
     .appSecret(sensitive.fb.appSecret)
+    .handleAuthCallbackError(function (req, res) {
+        return res.redirect("/");
+    })
     .findOrCreateUser(function (session, accessToken, accessTokExtra, fbData) {
         return authService.authoriseAndGetPromise(fbData, this.Promise());
     })
@@ -72,7 +81,9 @@ app.configure('production', function () {
     app.use(express.errorHandler()); 
 });
 
-// Routes
+/** 
+ * Routes
+ **/
 app.get('/', function(req, res) {
     if (req.loggedIn) {
         return res.redirect("/chat");
@@ -143,10 +154,10 @@ io.set('authorization', function (handshake, callback) {
 });
 
 io.configure(function () {
-    io.set("transports", ['websocket', 'xhr-polling', 'jsonp-polling', 'htmlfile']); 
-    io.set("polling duration", 20); 
-    io.set("browser client minification", true);
-    io.set("close timeout", 8);
+    io.set("transports", ['websocket', 'xhr-polling', 'jsonp-polling', 'htmlfile']);
+    io.enable('browser client minification');  // send minified client
+    io.enable('browser client etag');          // apply etag caching logic based on version number
+    io.enable('browser client gzip');          // gzip the file
     io.set('log level', 1);
 });
 
@@ -171,12 +182,14 @@ io.sockets.on('connection', function (socket) {
             socket.join(user._id);
             
             // Check if user is new / has no profile picture
-            if (!user.pic_large) {
-                return profilePicService.updateProfilePictures(accessToken, userId, function (err, pictureURL) {
+            if (!user.pic_large_url) {
+                return profilePicService.getProfilePictureUrl(accessToken, userId, function (err, pictureURL) {
                     if (err) { return res(err); }
 
-                    socket.handshake.fb_user.pic_large_url = pictureURL; // Fix socket: originally had no picture.
-                    
+                    user.pic_large_url = pictureURL;
+                    user.save();
+
+                    socket.handshake.fb_user.pic_large_url = pictureURL; // Fix socket handshake as it originally had no picture
                     res(null, socket.handshake.fb_user);
                 });
             }
