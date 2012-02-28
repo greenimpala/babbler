@@ -34,7 +34,7 @@ sessionStore = new MongoStore({
     username       : sensitive.db.user, 
     password       : sensitive.db.pass, 
     db             : sensitive.db.database,
-    clear_interval : (60 * 60) * 4 // Clear old sessions every four hours
+    clear_interval : (60 * 60) * 5 // Clear old sessions every five hours
 });
 mongoose.connect(sensitive.db.url);
 
