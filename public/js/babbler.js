@@ -7,15 +7,14 @@
 \____/ \__,_|_.__/|_.__/|_|\___|_|  
 _____________________________________
 
-@title     Babbler
-@author    Stephen Bradshaw
-@contact   @st3redstripe (Twitter)
-@version   0.02
+@st3redstripe (Twitter)
+Version 0.03-alpha
 
 */
+if (window.location.hash === '#_=_') { window.location.hash = ''; } // Fix to cleanup Facebook URI
 
 $(function () {
-    window.socket;
+    var socket;
 
     /**
      * Configuration
@@ -23,15 +22,31 @@ $(function () {
     Backbone.Model.prototype.idAttribute = "_id";
 
     window.Config = {
-        ANIM_SPEED: 100, // Speed of jQuery animations
-        has_focus: true
+        ANIM_SPEED: 200, // Speed of jQuery animations
+        has_focus: true // Window focus
     };
 
+    /**
+     * Helper functions
+     **/
+    var Helpers = {
+        // Wraps a DOM elements text links in <a> tags
+        linkify: function (element) {
+            // Strip tags
+            var stripped = element.html();
+            stripped.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+            // Wrap links
+            var exp = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+            element.html(stripped.replace(exp, "<a target=\"_blank\" href='$1'>$1</a>"));
+        }
+    };
+    
     /** 
      * Wrapper for playing audio with jPlayer
-     * Method play plays the file with the given string
+     * @play - plays the file with the supplied filename
      **/
-    window.AudioModule = {
+    window.AudioPlayer = {
         elem0: $("#jplayer-pop"),
         elem1: $("#jplayer-easteregg"),
         files: [],
@@ -47,7 +62,7 @@ $(function () {
                 supplied: "mp3",
                 volume: 0.5,
                 preload: 'auto'
-            })
+            });
             
             this.files.push(obj); 
         },
@@ -63,7 +78,7 @@ $(function () {
                 supplied: "mp3",
                 volume: 0.5,
                 preload: 'auto'
-            })  
+            });
 
             this.files.push(obj);
         },
@@ -91,10 +106,7 @@ $(function () {
     /** 
      * Models / Collections
      **/
-
-    var UserModel = Backbone.Model.extend({
-        
-    });
+    var UserModel = Backbone.Model.extend();
         
     // A single chat message
     var MessageModel = Backbone.Model.extend({
@@ -144,6 +156,7 @@ $(function () {
             });
         },
 
+        // Called on a collection 'fetch'
         parse: function (data) {
             // Accertain the partner from the list of participants
             var partnerAttributes = data.participants[0]._id === User.id ? data.participants[1] : data.participants[0];
@@ -183,8 +196,7 @@ $(function () {
 
         // If we are performing a CRUD operation, send the model to the server
         // Otherwise send options.data
-        var data = (method === "create" || method === "update" 
-                    || method === "delete") ? model.toJSON() : options.data;
+        var data = (method === "create" || method === "update" || method === "delete") ? model.toJSON() : options.data;
 
         // Send request via socket
         socket.emit(method + ":" + model_type, data, function(res) {
@@ -197,8 +209,8 @@ $(function () {
      * Modal dialogue that appears when a user click 'remove' for a chat session
      **/
     var RemoveSessionView = Backbone.View.extend({
-        el: $('#lightbox-container'),
-        lb_background: $('#lightbox'),
+        el: $('#friend-lightbox-container'),
+        lb_background: $('.lightbox'),
 
         events: {
             "click #lb-continue" : "continue",
@@ -206,8 +218,8 @@ $(function () {
         },
 
         display: function (session) {
-            this.lb_background.show();
-            this.$el.show();
+            this.lb_background.fadeIn(Config.ANIM_SPEED);
+            this.$el.fadeIn(Config.ANIM_SPEED);
 
             this.session = session;
         },
@@ -218,9 +230,13 @@ $(function () {
         },
 
         close: function () {
-            this.$el.hide();
-            this.lb_background.hide();
+            this.$el.fadeOut(Config.ANIM_SPEED);
+            this.lb_background.fadeOut(Config.ANIM_SPEED);
         }
+    });
+
+    var ChangePictureView = Backbone.View.extend({
+
     });
 
     /**
@@ -228,9 +244,9 @@ $(function () {
      * Listens for changes on an instance of ChatSessionModel
      **/
     var ChatSessionView = Backbone.View.extend({
-        className: 'hidden', // Ensure session is initially hidden
-        template: $('#template-chat-session').html(), // Cache main template
-        message_template: $('#template-chat-message').html(), // Cache message template
+        className: 'chat-session-wrapper',
+        template: Handlebars.compile($('#template-chat-session').html()), // Compile main template
+        message_template: Handlebars.compile($('#template-chat-message').html()), // Compile message template
 
         events: {
             "keypress #text" : "handleTextAreaKeypress"
@@ -263,7 +279,7 @@ $(function () {
             if (message_index === 0) {
                 // This is the first message in the chat area
                 // Create a new message from the template
-                var template = Mustache.render(this.message_template, template_data);
+                var template = this.message_template(template_data);
                 this.$('#conversation-actual').append(template);
             } else {
                 // There is more than one message in the DOM
@@ -273,7 +289,7 @@ $(function () {
                 if (previous_message.get("sender") !== message.get("sender")) { 
                     // The last message in the DOM was sent from a different user
                     // Create a new message from the template
-                    var template = Mustache.render(this.message_template, template_data);
+                    var template = this.message_template(template_data);
                     this.$('#conversation-actual').append(template);
                 } else { 
                     // The last message in the DOM is from the same user
@@ -285,6 +301,8 @@ $(function () {
                         .text(message.get("body"));
                 }   
             }
+            Helpers.linkify(this.$('.message-single:last')); // Wrap <a> around any links
+
             // Fix scroll height
             this.$('#conversation').scrollTop(99999);
         },
@@ -295,13 +313,13 @@ $(function () {
                     CurrentSession.set({ display : false });
                 }
 
-                this.$el.removeClass('hidden');
+                this.$el.show();
                 CurrentSession = this.model;
 
                 this.$('#conversation').scrollTop(99999); // Fix scroll height
                 this.$el.find('#text').focus(); // Force keyboard focus to textarea
             } else { // Hide session
-                this.$el.addClass('hidden');
+                this.$el.hide();
             }
         },
 
@@ -315,7 +333,7 @@ $(function () {
             // Remove
             self.$('#conversation-actual .message-group').remove();
 
-            // TODO: Resort
+            // TODO: Re-sort
 
             // Add
             messages.each(function (message) {
@@ -327,7 +345,7 @@ $(function () {
             var text = e.target.value
               , self = this;
 
-             if (e.keyCode === 13) { // Enter pressed, send if valid
+            if (e.keyCode === 13) { // Enter pressed, send if valid
                 e.preventDefault();
 
                 if (text.length < 1 || text.length > 600) { return; } // Validate length
@@ -346,6 +364,9 @@ $(function () {
                 this.model.get("typing_model").set({ user_typing: false });
 
                 e.target.value = ""; // Reset text-area
+
+                // Easter egg
+                if (text === "feelyourunning") { AudioPlayer.play("ben"); }
             } else { // User typing
 
                 // Set a timeout to change user_typing = false 
@@ -382,9 +403,12 @@ $(function () {
             });
         },
 
+        /** 
+         * Removes the session from the DOM, called when model destroyed
+         **/
         remove: function () {
             clearTimeout(this.typing_timeout); // Clear typing timeout
-            $(this.el).remove();
+            this.$el.remove();
 
             if (this.model === CurrentSession) {
                 CurrentSession = null;
@@ -392,16 +416,22 @@ $(function () {
         },
 
         /** 
-         * Method called once to create a new chat session
+         * Called once to render a new chat session
          **/
         renderOnce: function() {
-            var template = Mustache.render(this.template, this.model.get("partner").toJSON()); // Template result
-
+            var partner_attributes = this.model.get("partner").toJSON(); // Partner attributes
+            var template = this.template(partner_attributes); // Template result
             this.$el.html(template); // Update el
 
             // Create and add friend button
             var button_view = new FriendButtonView({ model: this.model });
-            this.$el.find('#partner-identity').append(button_view.render().el);
+            this.$('#partner-identity').append(button_view.render().el);
+
+            // Create and add online/offline bar if not a random session
+            if (!this.model.get("is_random")) {
+                var online_bar_view = new OnlineOfflineBarView({ model: this.model.get("partner") });
+                this.$('#chat-area').prepend(online_bar_view.render().el);
+            }
 
             this.partner_typing_el = this.$('#is-typing'); // Cache el for partner typing
 
@@ -429,7 +459,7 @@ $(function () {
         initialize: function () {
             _.bindAll(this, "handleButtonClick");
 
-            this.model.on("change:button_state", this.render, this)
+            this.model.on("change:button_state", this.render, this);
         },
 
         handleButtonClick: function () {
@@ -450,7 +480,7 @@ $(function () {
                     });
                     this.model.set({ button_state: 3 });
                     break;
-            };
+            }
         },
 
         render: function () {
@@ -469,8 +499,39 @@ $(function () {
                 case 3 :
                     message = "Friends";
                     break;
-            };
+            }
             this.$el.text(message);
+
+            return this;
+        }
+    });
+    
+    /**
+     * Responsible for the online/offline bar inside the chat panel
+     **/
+    var OnlineOfflineBarView = Backbone.View.extend({
+        template: Handlebars.compile($('#template-online-offline-bar').html()),
+
+        initialize: function () {
+            this.model.on("change:online_status", this.handleOnlineStatusChange, this);
+        },
+
+        handleOnlineStatusChange: function (){
+            var self = this;
+
+            this.$el.slideUp(Config.ANIM_SPEED, function(){
+                self.render();
+                self.$el.slideDown(Config.ANIM_SPEED);
+            });
+        },
+
+        render: function () {
+            var template_data = this.model.toJSON();
+            template_data.him_her = template_data.gender === "male" ? "him" : "her";
+
+            var template_result = this.template(template_data);
+
+            this.$el.html(template_result);
 
             return this;
         }
@@ -482,7 +543,7 @@ $(function () {
     var FriendsListItemView = Backbone.View.extend({
         tagName: 'li',
 
-        template: $('#template-friends-list').html(),
+        template: Handlebars.compile($('#template-friends-list').html()),
 
         events: {
             "click" : "display",
@@ -492,6 +553,7 @@ $(function () {
         initialize: function () {
             _.bindAll(this, 'deleteSession');
 
+            this.model.get("partner").on("change:online_status", this.handleOnlineStatusChange, this);
             this.model.get("messages").on("add", this.render, this);
             this.model.get("messages").on("reset", this.handleReset, this);
             this.model.on("change:unread", this.displayUnreadPopup, this);
@@ -501,14 +563,16 @@ $(function () {
 
         display: function () {
             // Hide the message popper
+            this.$('.new-message-popper').fadeOut(Config.ANIM_SPEED);
             this.model.set("unread", 0);
-            this.$el.find('.new-message-popper').fadeOut(Config.ANIM_SPEED);
             this.model.set({ "display" : true });
         },
 
         displayUnreadPopup: function () {
             var count = this.model.get("unread");
-            var elem = this.$el.find('.new-message-popper').text(count);
+            if (count === 0) { return; }
+
+            var elem = this.$('.new-message-popper').text(count);
             if (count === 1) { 
                 elem.fadeIn(Config.ANIM_SPEED);
             } else {
@@ -520,17 +584,19 @@ $(function () {
             if (message) {
                 var body = message.get("body")
                   , date = message.get("datetime").toTimeString().substring(0, 5);
-            };
+            }
 
             var template_data = {
                 'picture'    : this.model.get("partner").get("pic_large_url"),
                 'first_name' : this.model.get("partner").get("first_name"),
                 'body'       : body || "",
-                'date'       : date || ""
+                'date'       : date || "",
+                'online'     : this.model.get("partner").get("online_status") === true ? "online" : "",
+                'is_random'  : this.model.get("is_random")
             };
 
-            var template = Mustache.render(this.template, template_data);
-            $(this.el).html(template);
+            var template = this.template(template_data);
+            this.$el.html(template);
 
             return this;
         },
@@ -539,21 +605,33 @@ $(function () {
             var is_typing = model.get('partner_typing');
 
             if (is_typing) {
-                this.$el.find('.typing').show();
+                this.$('.typing').show();
             } else {
-                this.$el.find('.typing').hide();
+                this.$('.typing').hide();
+            }
+        },
+
+        handleOnlineStatusChange: function (partner) {
+            var light  = this.$('.online-light')
+              , online = partner.get("online_status"); 
+
+            if (online) {
+                light.addClass('online');
+            } else {
+                light.removeClass('online');
             }
         },
 
         handleReset: function () {
             var message = this.model.get("messages").last();
+            
             if (message) {
                 this.render(message);
             }
         },
 
         remove: function () {
-            $(this.el).remove();
+            this.$el.remove();
         },
 
         deleteSession: function (e) {
@@ -569,12 +647,10 @@ $(function () {
     });
 
     /**
-     * Friends dropdown box
+     * Sidebar / Friends list
      **/
-    var FriendsListView = Backbone.View.extend({
+    var SidebarView = Backbone.View.extend({
         el: $('#sidebar'),
-
-        current_session: null,
 
         initialize: function () {
             _.bindAll(this, 'addOne', 'addRandom', 
@@ -587,24 +663,26 @@ $(function () {
         },
 
         addOne: function (session) {
-            this.$el.find('.empty-message:eq(1)').hide();
+            this.$('.empty-message:eq(1)').hide();
             var view = new FriendsListItemView({ model: session });
-            this.$el.find('ul:eq(1)').append(view.render().el);
+            this.$('ul:eq(1)').append(view.render().el);
+            view.$el.fadeIn(Config.ANIM_SPEED);
         },
 
         addRandom: function (session) {
             var view = new FriendsListItemView({ model: session });
-            this.$el.find('.empty-message:eq(0)').hide();
-            this.$el.find('ul:eq(0)').append(view.render().el);
+            this.$('.empty-message:eq(0)').hide();
+            this.$('ul:eq(0)').append(view.render().el);
+            view.$el.fadeIn(Config.ANIM_SPEED);
         },
 
         restoreRandomMessage: function () {
-            this.$el.find('.empty-message:eq(0)').show();
+            this.$('.empty-message:eq(0)').fadeIn(Config.ANIM_SPEED);
         },
 
         restorePrivateMessage: function () {
             if (ChatSessions.length === 0) {
-                this.$el.find('.empty-message:eq(1)').show();
+                this.$('.empty-message:eq(1)').fadeIn(Config.ANIM_SPEED);
             }
         }
     });
@@ -647,7 +725,10 @@ $(function () {
         },
 
         initialize: function () {
-            _.bindAll(this, 'handleFocus', 'handleBlur', 'newMessagesFlash')
+            _.bindAll(this, 'handleFocus', 'handleBlur', 'newMessagesFlash', 'handleResize');
+
+            this.sidebar = $('#sidebar');
+            this.handleResize(); // Called on page load
         },
 
         handleFocus: function () {
@@ -664,7 +745,10 @@ $(function () {
         },
 
         handleResize: function () {
-            
+            // Window height - navigation bar height
+            var height = this.$el.height() - 52;
+
+            $(this.sidebar).height(height);
         }
     });
 
@@ -681,13 +765,13 @@ $(function () {
         },
 
         initialize: function () {
-            _.bindAll(this, 'createChatSession', 'requestNewPartner', 'endChat');
+            _.bindAll(this, 'createChatSession', 'requestNewPartner');
             var self = this;
 
             /* Global views/models */
             window.ChatSessions = new ChatSessionCollection();
             window.RandomSessions = new ChatSessionCollection();
-            window.FriendsList = new FriendsListView();
+            window.FriendsList = new SidebarView();
             window.RemoveSessionModal = new RemoveSessionView();
             window.WindowHandler = new WindowView();
             window.Settings = new SettingsView();
@@ -698,7 +782,6 @@ $(function () {
             RandomSessions.on('add', this.createChatSession);
 
             /* Socket IO */
-
             socket.on('new:Message', function (message) {
                 var chat_session = ChatSessions.get(message.session) 
                                     || RandomSessions.get(message.session);;
@@ -714,10 +797,13 @@ $(function () {
                     {
                         var unread_messages = chat_session.get("unread") + 1;
                         chat_session.set("unread", unread_messages);
+
+                        // Play pop sound
+                        AudioPlayer.play('pop');
                     }
 
                     // If window is not in focus, change the <title> to inform user
-                    if (!window.Config.has_focus) {
+                    if (!Config.has_focus) {
                         WindowHandler.newMessagesFlash();
                     }
                 }
@@ -755,6 +841,14 @@ $(function () {
                } 
             });
 
+            socket.on('update:OnlineStatus', function (data) {
+                var chat_session = ChatSessions.get(data.session);
+
+                if (chat_session) {
+                    chat_session.get("partner").set({ online_status : data.status });
+                }
+            });
+
             socket.on('delete:ChatSession', function (session) {
                 var chat_session = ChatSessions.get(session._id) 
                                     || RandomSessions.get(session._id);
@@ -777,6 +871,17 @@ $(function () {
                 // Create the partner and add to attribute hash
                 session.partner = new UserModel(partnerAttributes);
                 delete session.participants; 
+
+                // Check if users are already friends
+                var are_friends = ChatSessions.any(function (obj) {
+                    return obj.get("partner").id === session.partner.id;
+                });
+
+                // If they are friends, set the friend button
+                if (are_friends) {
+                    session.button_state = 3;
+                }
+
                 random_session = new ChatSessionModel(session);
 
                 RandomSessions.add(random_session);
@@ -793,7 +898,8 @@ $(function () {
             // TO-DO: Remove the following HTML from the js
             this.$('#mini-profile-pic').html('<img src="' + User.get("pic_large_url") + '" style="height: 28px; width: 28px" />');
             this.$('#message-update').fadeOut(Config.ANIM_SPEED);
-            ChatSessions.fetch({ add: true }); // Grab all the users private chat sessions / friends list
+
+            ChatSessions.fetch({ add: true }); // Grab all the users private chat sessions
         },
 
         createChatSession: function(session) {
@@ -814,15 +920,6 @@ $(function () {
             socket.emit('create:RandomChatSession');
 
             this.$('#btn-new-partner').html("Searching...");
-        },
-
-        endChat: function () {
-            // Find the random chat session
-            var session = ChatSessions.find(function(session) {
-                return session.get("is_random") === true;
-            });
-
-            session.destroy();
         }
     });
 
@@ -832,13 +929,6 @@ $(function () {
     socket.on('connect', function () {
         // The socket connected succesfully
 
-        // If the app has already launched, don't reload
-        // Occurs when the socket connection drops and re-connects
-        if (window.App) {
-            console.log("Reconnected to server.");
-            return;
-        }
-
         // Request initialization
         socket.emit('init', null, function (err, user) {
             if (err) { // Profile picture could not be downloaded
@@ -846,9 +936,25 @@ $(function () {
                 return;
             }
 
-            window.User = new UserModel(user);
-            window.App = new AppView(); // Begin
+            // If the app has already launched, don't reload
+            // Occurs when the socket connection drops and re-connects
+            if (window.App) {
+                $('.nugget-wrapper').fadeOut(Config.ANIM_SPEED); // Hide 'reconnecting'
+                window.ChatSessions.fetch({ add: true });
+            } else {
+                window.User = new UserModel(user);
+                window.App = new AppView(); // Begin
+            }
         });
+    });
+
+    socket.on('disconnect', function () {
+        // End any random session that may exist
+        if (CurrentSession && CurrentSession.get("is_random")) {
+            CurrentSession.destroy();
+        }
+        // Show reconnect modal
+        $('.nugget-wrapper').fadeIn(Config.ANIM_SPEED);
     });
 
 });

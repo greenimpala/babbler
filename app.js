@@ -26,7 +26,7 @@ process.on('uncaughtException', function (err) {
 });
 
 /** 
- * Database
+ * Session Store
  **/
 sessionStore = new MongoStore({ 
     host           : sensitive.db.host, 
@@ -34,7 +34,7 @@ sessionStore = new MongoStore({
     username       : sensitive.db.user, 
     password       : sensitive.db.pass, 
     db             : sensitive.db.database,
-    clear_interval : (60 * 60) * 5 // Clear old sessions every five hours
+    clear_interval : (60 * 60) * 4 // Clear old sessions every four hours
 });
 mongoose.connect(sensitive.db.url);
 
@@ -42,8 +42,8 @@ mongoose.connect(sensitive.db.url);
  * Authorisation
  **/
 everyauth.facebook
-    .scope('user_photos, publish_actions')
-    .myHostname('http://www.babblerchat.com')
+    .scope('user_photos')
+    //.myHostname('http://www.babblerchat.com')
     .appId(sensitive.fb.appId)
     .appSecret(sensitive.fb.appSecret)
     .handleAuthCallbackError(function (req, res) {
@@ -55,6 +55,9 @@ everyauth.facebook
     .redirectPath('/chat');
 everyauth.helpExpress(app);
 
+/** 
+ * Configuration
+ **/
 app.configure(function () {
     app.set('views', __dirname + '/views');
     app.set('view engine', 'jade');
@@ -66,10 +69,11 @@ app.configure(function () {
         secret: sensitive.session.secret,
         key: 'express.sid'
     }));
+    app.use(express.favicon());
     app.use(everyauth.middleware());
     app.use(express.methodOverride());
     app.use(app.router);
-    app.use(express.static(__dirname + '/public'));
+    app.use(express.static(__dirname + '/public', { maxAge: 2500000000 })); // Cache static assets for 1 month
     app.use(express.errorHandler());
 });
 
@@ -84,25 +88,27 @@ app.configure('production', function () {
 /** 
  * Routes
  **/
+var title = "Babbler - Chat to random people on Facebook!";
+
 app.get('/', function(req, res) {
     if (req.loggedIn) {
         return res.redirect("/chat");
     }
-    res.render('index', { title: 'Babbler - Chat to random people on Facebook!' });
+    res.render('index', { 'title': title });
 });
 
 app.get('/chat', function(req, res) {
     if (req.loggedIn) {
         var userId = req.session.auth.facebook.user.id;
         
-        return models.User.findOne({ profile_id: userId }, function (err, user) {
+        return models.User.findOne({ profile_id: userId }, { profile_id: 0 },  function (err, user) {
             if (err) { return res.end('Database error.'); }
 
             return res.render('chat', {
-                title: 'Babbler - Chat to random people on Facebook!',
-                layout: '_chat',
-                currentUser: user,
-                online: io.sockets.clients().length
+                'title': title,
+                'layout': '_chat',
+                'currentUser': user,
+                'online': io.sockets.clients().length
             });
         });
     }
@@ -117,9 +123,9 @@ app.get('/admin', function(req, res) {
 /** 
  * Socket.IO
  **/
-var socketPool = []; // Sockets requesting partners
+var socket_pool = []; // Sockets requesting partners
 
-partnerPairingService.poll(socketPool); // Service runs continuously, pairing available sockets.
+partnerPairingService.poll(socket_pool); // Service runs continuously, pairing available sockets.
 
 // Initial authorization for a connecting socket
 // Returns callback (null, true) if auth was succesful
@@ -134,8 +140,8 @@ io.set('authorization', function (handshake, callback) {
             try {
                 // Catch nescessary as session may exist 
                 // but facebook auth data may not exist
-                var userId      = session.auth.facebook.user.id,
-                    accessToken = session.auth.facebook.accessToken;
+                var userId  = session.auth.facebook.user.id
+                  , accessToken = session.auth.facebook.accessToken;
                 
                 return models.User.findOne({ profile_id: userId }, function (err, user) {
                     if (err) { throw new Error('Db error'); }
@@ -177,19 +183,26 @@ io.sockets.on('connection', function (socket) {
         models.User.findOne({ profile_id: userId }, function (err, user) {
             if (err) { return res(err); }
 
+            // Set socket as online
+            user.online_status = true;
+            user.save();
+
             // Set socket to listen on a room named after their _id
             // Any chat responses from chat sessions will be sent to this room
             socket.join(user._id);
             
             // Check if user is new / has no profile picture
             if (!user.pic_large_url) {
-                return profilePicService.getProfilePictureUrl(accessToken, userId, function (err, pictureURL) {
+                
+                // Get an initial profile picture
+                return profilePicService.getProfilePictureUrl(accessToken, function (err, pictureURL) {
                     if (err) { return res(err); }
 
                     user.pic_large_url = pictureURL;
                     user.save();
 
-                    socket.handshake.fb_user.pic_large_url = pictureURL; // Fix socket handshake as it originally had no picture
+                    // Fix socket handshake data, originally had no picture
+                    socket.handshake.fb_user.pic_large_url = pictureURL;
                     res(null, socket.handshake.fb_user);
                 });
             }
@@ -199,13 +212,35 @@ io.sockets.on('connection', function (socket) {
 
     // Client is requesting their collection of private chat sessions
     socket.on('read:ChatSessionCollection', function (data, res) {
-        // Find all chat sessions for this user
-        // Exclude messages
+        var socket_id = socket.handshake.fb_user._id.toString();
+
+        // Return all chat sessions for this user
         models.ChatSession.find({ 
-            'participants._id' : socket.handshake.fb_user._id 
-        }, { 'messages' : 0 }, function (err, sessions) {
+            'participants' : socket_id
+        }, { 'messages' : 0 })
+        .populate('participants', { profile_id: 0 })
+        .run(function (err, sessions) {
             if (err || !sessions) { return res([]); }
+
+            // Return sessions
             res(sessions);
+
+            // Inform all friends that this user is now online
+            var length = sessions.length;
+
+            for (var i = 0; i < length; i++) {
+                // Get partner
+                var partner = sessions[i].participants[0]._id.toString() === socket_id ?
+                                    sessions[i].participants[1] : sessions[i].participants[0];
+
+                var partner_id = partner._id.toString();
+
+                // Socket request 
+                socket.broadcast.to(partner_id).emit('update:OnlineStatus', {
+                    'session' : sessions[i]._id,
+                    'status' : true
+                }); 
+            }
         });
     });
 
@@ -213,17 +248,17 @@ io.sockets.on('connection', function (socket) {
     socket.on('read:MessageCollection', function (data, res) {
         models.ChatSession.findOne({ $and: [
             { _id : data.session },
-            { 'participants._id' : socket.handshake.fb_user._id }
+            { 'participants' : socket.handshake.fb_user._id }
         ]}, { 'messages' : 1 }, function (err, session) {
             if (err || !session) { return res([]); }
 
-            res(session.messages.slice(-30)) // Cap at 30 most recent messages
+            res(session.messages.slice(-80)) // Limit number sent
         });
     });
 
     // Client is requesting a random partner
     socket.on('create:RandomChatSession', function () {
-        socketPool.push(socket); // Add socket to socket pool
+        socket_pool.push(socket); // Add socket to socket pool
     });
     
     // Client has sent a new message
@@ -243,7 +278,7 @@ io.sockets.on('connection', function (socket) {
             // Insert message
             models.ChatSession.collection.update({ $and: [
                 { '_id' : session },
-                { 'participants._id' : socket.handshake.fb_user._id }
+                { 'participants' : socket.handshake.fb_user._id }
             ]}, { $push : { 'messages' : message } });
         }
     });
@@ -251,33 +286,37 @@ io.sockets.on('connection', function (socket) {
     // User has sent or is accepting a friend request
     socket.on('update:FriendStatus', function (data) {
         // Validate
-        if (isNaN(data.state) && data.state > 3 && data.state < 0) { return; }
+        if (isNaN(data.state) && data.state > 3 && data.state < 0) return;
 
         return socket.get('RandomSession', function (err, session) {
             // Validation
-            if (err || !session) { return; }
+            if (err || !session) return;
 
-            // TO-DO: validate the state
+            // TO-DO: validate if state == 3, a haxor could compromise and 'force' a friend request
 
             // User has accepted the friend request
             // Create friendship
             if (data.state === 3) {
                 var new_session = new models.ChatSession({
                     _id: guidGenerator.create(),
-                    participants: session.participants,
+                    participants: [session.participants[0]._id, session.participants[1]._id],
                     button_state: 3 // User pair are friends
                 });
 
                 // Save new session in database
-                new_session.save(function(err){
-                    if (err) { return; }
+                new_session.save(function(){
+                    // Get the saved session and inform both sockets
+                    models.ChatSession.findOne({ _id : new_session._id })
+                        .populate('participants', { profile_id: 0 })
+                        .run(function(err, session){
+                            if (err || !session) return;
 
-                    // Inform user pair
-                    socket.broadcast.to(session.partner).emit('new:PrivateChatSession', new_session);
-                    socket.emit('new:PrivateChatSession', new_session);
+                            socket.broadcast.to(session.partner).emit('new:PrivateChatSession', session);
+                            socket.emit('new:PrivateChatSession', session);
+                        });
                 });
             }
-
+            // Inform partner of change
             socket.broadcast.to(session.partner).emit('update:FriendStatus', data);
         });
     });
@@ -295,27 +334,64 @@ io.sockets.on('connection', function (socket) {
         if (!session.is_random) {
             models.ChatSession.collection.remove({ $and: [
                 { _id : session._id },
-                { 'participants._id' : socket.handshake.fb_user._id }
+                { 'participants' : socket.handshake.fb_user._id }
             ]});
         }
     });
     
     socket.on('disconnect', function () {
-        var i;
+        // Set the user as offline
+        var socket_id = socket.handshake.fb_user._id.toString();
+
+        // TO-DO: Shouldn't have to use 'collection' for the update
+        models.User.collection
+            .update(
+            { profile_id : socket.handshake.fb_user.profile_id },
+            { $set: { online_status : false }});
 
         // If the socket is in a random room, end the chat session
         socket.get('RandomSession', function (err, session) {
             if (err || !session) { return; }
+
             socket.broadcast.to(session.partner).emit('delete:ChatSession', session);
         });
 
-        // Remove the disconected socket from the socketPool
-        for (i = 0; i < socketPool.length; i += 1) {
-            if (socketPool[i] === socket) {
-                socketPool.splice(i, 1);
+        // If the socket is waiting to be paired up, remove them
+        var i;
+        for (i = 0; i < socket_pool.length; i += 1) {
+            if (socket_pool[i] === socket) {
+                socket_pool.splice(i, 1);
                 return;
             }
         }
+
+        // Inform all friends that this socket is now offline
+        models.ChatSession.find({ 
+            'participants' : socket_id
+        }, { 'participants' : 1 })
+        .populate('participants')
+        .run(function (err, sessions) {
+
+            if (err || !sessions) { return; }
+
+            // Inform all friends that this user is now offline
+            var length = sessions.length;
+
+            for (var i = 0; i < length; i++) {
+                // Get partner
+                var partner = sessions[i].participants[0]._id.toString() === socket_id ?
+                                 sessions[i].participants[1] : sessions[i].participants[0];
+
+                if (!partner.online_status) { continue; } // Continue if partner is offline
+
+                // Emit online status
+                socket.broadcast.to(partner._id.toString()).emit('update:OnlineStatus', {
+                    'session' : sessions[i]._id,
+                    'status' : false
+                });
+            }
+        });
+
     });
 });
 

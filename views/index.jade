@@ -2,13 +2,42 @@ div#blue-container
 	div#clouds
 		div#light
 			div.container
-				h2 Babbler
+				div#logo
 				div#section-left
 					div#home-image
 				div#section-right-top
 					h3 Babbler lets you meet random people on Facebook.
-					p.sub-title Find people near you or just connect with someone completely random. It’s free, and insanely addictive.
+					p.sub-title Pair up and chat with new people. It's completely free and your profile page is always kept private!
+					hr
+					div#counter-wrapper
+						div.counter 0
+						div.counter 0
+						div.counter 0
+						div.counter 3
+						div.counter 4
+						div.counter 2
+						div.counter 1
+						div.counter 7
+					p.messages-sent Messages sent
 				div#section-right-bottom
-					a#login-button(href="#") Login With Facebook
+					a#login-button(href="/auth/facebook") Login With Facebook
 div#white-container
 	div.container
+		div#mini-section-container
+			div.mini-section.margin
+				p.mini-title Find Friends
+				hr
+				p.mini-more 
+					| Chatting to someone interesting? You can send them a friend request to chat with them at anytime.
+			div.mini-section.margin
+				p.mini-title Privacy
+				hr
+				p.mini-more 
+					| Your profile page is never shared and you can choose your display picture.
+			div.mini-section
+				p.mini-title No Spam Policy
+				hr
+				p.mini-more 
+					| We hate it as much as you. Babbler will never post anything to your Facebook.
+		hr.footer
+		p.footer Contact &nbsp;|&nbsp; © Babbler 2012

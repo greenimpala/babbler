@@ -1,3 +1,8 @@
+p{
+	font-family: "Helvetica Neue", Helvetica, Arial, Tahoma;
+	font-size: 12px;
+}
+
 div#blue-container {
 	float: left;
 	width: 100%;
@@ -22,15 +27,49 @@ div#light{
 div#clouds{
 	background-image:url('/images/clouds.png');
 	background-repeat: no-repeat;
-	background-position:center 248px;
-	height: 422px;
+	background-position:center 268px;
+	height: 452px;
 	margin: 0px auto;
+}
+
+div#blue-container hr{
+	width: 100%;
+    height: 1px;
+    color: #cbe2fc;
+    background: #cbe2fc;
+    border: 0;
+    margin-top: 26px;
+    margin-bottom: 10px;
+}
+
+div#counter-wrapper{
+	float: left;
+	width: 100%;
+	display: block;
+	margin-bottom: 4px;
+}
+
+div.counter{
+	background-image:url('/images/counter.png');
+	background-repeat: no-repeat;
+	width: 32px;
+	height: 44px;
+	line-height: 40px;
+	margin-right: 7px;
+	text-align: center;
+	float: left;
+
+	font-family: "Helvetica Neue", Helvetica, Arial, Tahoma;
+	color: #444444;
+	font-size: 26px;
+	font-weight: bold;
 }
 
 div#white-container {
 	float: left;
 	width: 100%;
 	height: 100%;
+	margin-top: 20px;
 }
 
 div.container {
@@ -58,13 +97,15 @@ div#section-right-bottom {
 	float: left;
 }
 
-h2 {
+div#logo {
 	margin-left: 484px;
-	margin-bottom: 30px;
+	margin-bottom: 40px;
+	margin-top: 10px;
 	display:block;
-	font-family: "Helvetica Neue", Helvetica, Arial, Tahoma;
-	color: white;
-	font-size: 42px;
+	background-image:url('/images/logo-home.png');
+	background-repeat: none;
+	width: 179px;
+	height: 46px;
 }
 
 h3 {
@@ -73,14 +114,20 @@ h3 {
 	color: #1b1b1b;
 	font-size: 20px;
 	font-weight: bold;
-	padding-bottom: 10px;
+	padding-bottom: 14px;
 }
 
 p.sub-title {
 	display:block;
-	font-family: "Helvetica Neue", Helvetica, Arial, Tahoma;
 	color: #46678c;
 	font-size: 13px;
+}
+
+p.messages-sent{
+	display:block;
+	color: white;
+	font-size: 13px;
+	float: right;
 }
 
 #home-image{
@@ -133,4 +180,49 @@ a#login-button:active{
 	background: -ms-linear-gradient(top,  #1f77d3 0%,#459cf8 100%); /* IE10+ */
 	background: linear-gradient(top,  #1f77d3 0%,#459cf8 100%); /* W3C */
 	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#1f77d3', endColorstr='#459cf8',GradientType=0 ); /* IE6-8 */
+}
+
+div#mini-section-container{
+	float: left;
+	width: 100%;
+	margin-bottom: 24px;
+}
+
+div.mini-section{
+	float: left;
+	width: 200px;
+}
+
+div#white-container hr{
+	float: left;
+	width: 100%;
+    height: 1px;
+    color: #dbdbdb;
+    background: #dbdbdb;
+    border: 0;
+    margin-bottom: 16px;
+}
+
+div.mini-section.margin{
+	margin-right: 98px;
+}
+
+p.mini-title{
+	font-size: 16px;
+	font-weight: bold;
+	margin-bottom: 12px;
+}
+
+p.mini-more{
+	color: #595959;
+}
+
+hr.footer{
+	margin-bottom: 10px !important;
+}
+
+p.footer{
+	float: right;
+	color: #808080;
+	font-size: 11px;
 }

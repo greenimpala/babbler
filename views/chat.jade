@@ -1,25 +1,22 @@
 div#fb-root
-script(type = "text/javascript")
-  (function(d, s, id) {
-  var js, fjs = d.getElementsByTagName(s)[0];
-  if (d.getElementById(id)) return;
-  js = d.createElement(s); js.id = id;
-  js.src = "//connect.facebook.net/en_GB/all.js#xfbml=1&appId=273284762734006";
-  fjs.parentNode.insertBefore(js, fjs);
-  }(document, 'script', 'facebook-jssdk'));
-  !function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");
+script(type = "text/javascript", src="/js/lib/social-buttons.js?ver=1")
 
 script(type="text/javascript", src="https://apis.google.com/js/plusone.js")
   {lang: 'en-GB'}
 
-div#lightbox
-div#lightbox-container
-    div#lightbox-window
+div.lightbox
+div#friend-lightbox-container.lightbox-container
+    div.lightbox-window
         h2 Remove Friend
         hr
         p Are you sure you want to remove this user from your friends? This cannot be undone.
         div.button.grey#lb-continue Continue
         div.button.grey#lb-close Close
+
+div.nugget-wrapper  
+    div#disconnect-nugget
+    p The connection was lost, reconnecting...
+
 
 div#header.unselectable
     div#left.section
@@ -47,14 +44,13 @@ div#header.unselectable
                     input(type="checkbox", checked="true", id="checkbox-sounds") 
                     | Chat sounds
                 li Display picture
-                li Help
                 a(href="/logout")
                     li Logout
 
 div#sidebar
     div#social-buttons
         div.social-button
-            div.fb-like(data-send="false", data-layout="button_count", data-width="80", data-show-faces="false", data-font="arial")
+            div.fb-like(data-send="false", data-href="http://www.babblerchat.com", data-layout="button_count", data-width="80", data-show-faces="false", data-font="arial")
         div.social-button
             a(href="https://twitter.com/share", class="twitter-share-button", data-url="http://www.babblerchat.com")
         div.social-button
@@ -63,11 +59,11 @@ div#sidebar
     h2 Random Partner
     hr
     ul
-    p.empty-message When you're chatting to someone random, they will appear here!
+    p.empty-message When you're chatting to someone random, they will appear here.
     h2 Friends
     hr
     ul
-    p.empty-message There are no friends.
+    p.empty-message Your friends list is empty.
 
 div#main
 
@@ -85,37 +81,47 @@ div#main
 
     div#chat-sessions-container
 
-    script(id="template-chat-session", type="text/x-mustache").
+    script(id="template-chat-session", type="text/x-handlebars-template").
     
-        <div class="chat-session-wrapper">
-            <div id="partner-identity">
-                <div id="img-container">
-                    <img id="picture" src="{{pic_large_url}}" />
-                </div>
-                <span>{{first_name}}</span>
-                <span class="location">Leicester, UK</span>
+        <div id="partner-identity">
+            <div id="img-container">
+                <img id="picture" src="{{pic_large_url}}" />
             </div>
+            <span>{{first_name}}</span>
+            <span class="location">{{location}}</span>
+        </div>
 
-            <div id="chat-area-wrapper">
-                <div id="chat-area">
-                    <div id="conversation-wrapper">
-                        <div id="conversation">
-                            <div class="message-spacer.no-border"></div>
-                            <div id="conversation-actual"></div>
-                            <div id="partner-typing" >
-                                <div id="is-typing" style="display: none">
-                                    <div id="partner-typing-img"></div>
-                                    <span>{{first_name}} is typing...</span>
-                                </div>
+        <div id="chat-area-wrapper">
+            <div id="chat-area">
+                <div id="conversation-wrapper">
+                    <div id="conversation">
+                        <div class="message-spacer.no-border"></div>
+                        <div id="conversation-actual"></div>
+                        <div id="partner-typing" >
+                            <div id="is-typing" style="display: none">
+                                <div id="partner-typing-img"></div>
+                                <span>{{first_name}} is typing...</span>
                             </div>
                         </div>
                     </div>
-                    <textarea id="text"></textarea>
                 </div>
+                <textarea id="text"></textarea>
             </div>
         </div>
 
-    script(id="template-chat-message", type="text/x-mustache").
+    script(id="template-online-offline-bar", type="text/x-handlebars-template").
+
+        <div class="online-status-bar">
+            {{#if online_status}}
+                <div class="online-light online"></div>
+                <p>{{first_name}} is online.</p>
+            {{else}}
+                <div class="online-light"></div>
+                <p>{{first_name}} is offline but you can still {{him_her}} messages.</p>
+            {{/if}}
+        </div>
+
+    script(id="template-chat-message", type="text/x-handlebars-template").
     
         <div class="message-spacer"></div>
         <div class="message-group">
@@ -125,7 +131,7 @@ div#main
             </div>
         </div>
     
-    script(id="template-friends-list", type="tex/x-mustache").
+    script(id="template-friends-list", type="text/x-handlebars-template").
 
         <div class="left">
         <img src="{{picture}}" style="height: 46px; width: 46px">
@@ -135,7 +141,12 @@ div#main
             <p class="remove">Remove</p>
             <table>
                 <tr><td><p class="name">{{first_name}}</p><div class="typing" style="display: none"></div></td></tr>
-                <tr><td><p class="message">{{body}}</p></td></tr>
+                <tr>
+                    <td><p class="message">{{body}}</p></td>
+                    {{#unless is_random}}
+                        <td><div class="online-light {{online}}"></div></td>
+                    {{/unless}}
+                </tr>
                 <tr><td><p class="date">{{date}}</p></td></tr>
             </table>
         </div>

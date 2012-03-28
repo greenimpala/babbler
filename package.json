@@ -1,19 +1,24 @@
 {
   "name": "Babbler",
-  "version": "0.0.2-12",
+  "version": "0.0.3-36",
   "private": true,
   "subdomain": "babbler",
   "scripts": {
     "start": "app.js"
   },
   "dependencies": {
-    "express": "2.5.2",
+    "express": ">= 2.5.2",
     "jade": ">= 0.0.1",
     "mongoose": ">= 2.4.8",
-    "connect": ">= 1.8.5",
+    "connect": "1.8.5",
     "connect-mongo": ">= 0.1.6",
-    "everyauth": ">= 0.2.27",
-    "socket.io": ">= 0.8.7"
+    "everyauth": "0.2.30",
+    "socket.io": ">= 0.9",
+    "knox": ">= 0.0.9"
+  },
+  "devDependencies": {
+    "injectr": ">= 0.3.1",
+    "jasmine-node": ">= 1.0"
   },
   "domains": [
     "www.babblerchat.com"
